@@ -21,3 +21,4 @@ signing/*.properties
 *.p12
 !signing/release-signing.properties.example
 AGENTS.md
+/.claude/

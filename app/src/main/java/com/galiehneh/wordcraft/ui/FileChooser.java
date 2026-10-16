@@ -18,19 +18,6 @@ import com.galiehneh.wordcraft.R;
 public final class FileChooser {
     private static final String TAG = "WordCraft";
 
-    private static final String[] SUPPORTED_MIMES = {
-            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-            "application/msword",
-            "application/vnd.oasis.opendocument.text",
-            "application/rtf",
-            "text/rtf",
-            "text/plain",
-            "text/markdown",
-            "text/html",
-            "application/pdf",
-            "application/octet-stream"
-    };
-
     private final ComponentActivity activity;
     private final ActivityResultLauncher<Intent> chooserLauncher;
     private ValueCallback<Uri[]> filePathCallback;
@@ -49,23 +36,20 @@ public final class FileChooser {
         }
         filePathCallback = callback;
 
-        Intent intent = openIntent(Intent.ACTION_OPEN_DOCUMENT);
-        if (params != null && params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE) {
-            intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
-        }
+        String[] mimes = AcceptTypes.resolve(params == null ? null : params.getAcceptTypes());
+        boolean multiple = params != null
+                && params.getMode() == WebChromeClient.FileChooserParams.MODE_OPEN_MULTIPLE;
 
         try {
-            chooserLauncher.launch(intent);
+            chooserLauncher.launch(openIntent(Intent.ACTION_OPEN_DOCUMENT, mimes, multiple));
         } catch (ActivityNotFoundException e) {
             try {
-                chooserLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), activity.getString(R.string.choose_document)));
-            } catch (Exception ex) {
+                chooserLauncher.launch(Intent.createChooser(
+                        openIntent(Intent.ACTION_GET_CONTENT, mimes, multiple),
+                        activity.getString(R.string.choose_document)));
+            } catch (RuntimeException ex) {
                 Log.e(TAG, "Cannot launch file chooser", ex);
-                if (filePathCallback != null) {
-                    filePathCallback.onReceiveValue(null);
-                    filePathCallback = null;
-                }
-                return false;
+                cancelPending();
             }
         }
         return true;
@@ -97,11 +81,16 @@ public final class FileChooser {
         filePathCallback = null;
     }
 
-    private static Intent openIntent(String action) {
+    private static Intent openIntent(String action, String[] mimes, boolean multiple) {
         Intent intent = new Intent(action);
         intent.addCategory(Intent.CATEGORY_OPENABLE);
-        intent.setType("*/*");
-        intent.putExtra(Intent.EXTRA_MIME_TYPES, SUPPORTED_MIMES);
+        if (mimes.length == 1) {
+            intent.setType(mimes[0]);
+        } else {
+            intent.setType("*/*");
+            intent.putExtra(Intent.EXTRA_MIME_TYPES, mimes);
+        }
+        if (multiple) intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
         return intent;
     }
 }

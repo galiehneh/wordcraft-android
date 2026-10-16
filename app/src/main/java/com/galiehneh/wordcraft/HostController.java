@@ -27,7 +27,7 @@ import java.util.concurrent.Executors;
 /** Host-side logic behind the bridge: pending opens, recovery snapshots, confirmed saves, Back. */
 final class HostController implements HostBridge.Listener {
     private static final String TAG = "WordCraft";
-    private static final long BACK_TIMEOUT_MS = 1500;
+    private static final long BACK_TIMEOUT_MS = 4000;
     private static final long OPEN_TIMEOUT_MS = 15_000;
 
     /** Effects on the activity, always invoked on the UI thread. */
@@ -42,20 +42,6 @@ final class HostController implements HostBridge.Listener {
         void openExternal(Uri uri);
 
         void pickOpen();
-    }
-
-    private static final class Pending {
-        final DocSource source;
-        final String name;
-        final String sourceUri;
-        final boolean recovered;
-
-        Pending(DocSource source, String name, String sourceUri, boolean recovered) {
-            this.source = source;
-            this.name = name;
-            this.sourceUri = sourceUri;
-            this.recovered = recovered;
-        }
     }
 
     private final Callbacks callbacks;
@@ -74,7 +60,7 @@ final class HostController implements HostBridge.Listener {
     private boolean destroyed;
     private boolean launchOpenExpected;
     private boolean backPending;
-    private Pending pending;
+    private PendingOpen pending;
     private String currentSource = "";
     private String openingSource = "";
 
@@ -111,7 +97,7 @@ final class HostController implements HostBridge.Listener {
                 String name = documents.displayName(uri);
                 documents.probe(uri);
                 DocSource source = () -> documents.openStream(uri);
-                main.post(() -> queueOpen(new Pending(source, name, uri.toString(), false)));
+                main.post(() -> queueOpen(new PendingOpen(source, name, uri.toString(), false)));
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
@@ -135,7 +121,7 @@ final class HostController implements HostBridge.Listener {
         });
     }
 
-    private void queueOpen(Pending p) {
+    private void queueOpen(PendingOpen p) {
         if (destroyed) return;
         launchOpenExpected = false;
         pending = p;
@@ -143,7 +129,7 @@ final class HostController implements HostBridge.Listener {
     }
 
     private void flushOpen() {
-        Pending p = pending;
+        PendingOpen p = pending;
         if (p == null || !policy.canSendOpen()) return;
         pending = null;
         // A dirty document is about to be replaced: persist it first (the editor also prompts).
@@ -172,7 +158,7 @@ final class HostController implements HostBridge.Listener {
             DocSource source = () -> new FileInputStream(recovery.docFile());
             main.post(() -> {
                 if (!destroyed && policy.acceptRestore(pending != null)) {
-                    queueOpen(new Pending(source, meta.name, meta.sourceUri, true));
+                    queueOpen(new PendingOpen(source, meta.name, meta.sourceUri, true));
                 }
             });
         });
@@ -202,7 +188,9 @@ final class HostController implements HostBridge.Listener {
         bridge.sendBack();
     }
 
+    /** No reply at all within the timeout: the page is unresponsive, leave the app. */
     private void onBackTimeout() {
+        if (!backPending) return;
         backPending = false;
         callbacks.exit(state.dirty);
     }

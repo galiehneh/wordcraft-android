@@ -2,12 +2,15 @@ package com.galiehneh.wordcraft.io;
 
 import android.util.AtomicFile;
 
+import com.galiehneh.wordcraft.web.HostProtocol;
+
 import org.json.JSONException;
 import org.json.JSONObject;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 
 /** Crash-safe snapshot of the current document: {@code current.docx} + {@code meta.json}. */
@@ -40,14 +43,14 @@ public final class RecoveryStore {
         return docFile.getBaseFile();
     }
 
-    public synchronized void write(Meta meta, byte[] docx) throws IOException {
-        writeAtomic(docFile, docx);
+    public synchronized void write(Meta meta, ByteBuffer docx) throws IOException {
+        writeAtomic(docFile, docx.duplicate());
         try {
             JSONObject json = new JSONObject()
                     .put("name", meta.name)
                     .put("sourceUri", meta.sourceUri)
                     .put("rev", meta.rev);
-            writeAtomic(metaFile, json.toString().getBytes(StandardCharsets.UTF_8));
+            writeAtomic(metaFile, ByteBuffer.wrap(json.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (JSONException e) {
             throw new IOException(e);
         }
@@ -70,10 +73,10 @@ public final class RecoveryStore {
         metaFile.delete();
     }
 
-    private static void writeAtomic(AtomicFile file, byte[] bytes) throws IOException {
+    private static void writeAtomic(AtomicFile file, ByteBuffer bytes) throws IOException {
         FileOutputStream out = file.startWrite();
         try {
-            out.write(bytes);
+            HostProtocol.writeTo(out, bytes);
             file.finishWrite(out);
         } catch (IOException e) {
             file.failWrite(out);

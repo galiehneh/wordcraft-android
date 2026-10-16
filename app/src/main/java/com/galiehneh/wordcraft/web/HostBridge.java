@@ -13,21 +13,26 @@ import androidx.webkit.WebViewCompat;
 import org.json.JSONException;
 import org.json.JSONObject;
 
+import java.nio.ByteBuffer;
+
 /** Receives {@code WordCraftHost} messages (docs/host-protocol.md) and posts events back to JS. */
 public final class HostBridge implements WebViewCompat.WebMessageListener {
     private static final String TAG = "WordCraft";
 
-    /** Parsed JS messages, delivered on the UI thread. {@code bytes} is never null. */
+    /** Parsed JS messages, delivered on the UI thread. {@code bytes} is never null (array-backed view). */
     public interface Listener {
         void onReady();
 
         void onState(HostState state);
 
-        void onSave(long ticket, String kind, String name, String mime, byte[] bytes);
+        void onSave(long ticket, String kind, String name, String mime, ByteBuffer bytes);
 
-        void onSnapshot(String name, long rev, byte[] docx);
+        /** A {@code save} could not be processed; the ticket must be answered with failed. */
+        void onSaveRejected(long ticket, String reason);
 
-        void onPrint(String name, byte[] pdf);
+        void onSnapshot(String name, long rev, ByteBuffer docx);
+
+        void onPrint(String name, ByteBuffer pdf);
 
         void onIme(boolean visible);
 
@@ -41,6 +46,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
     private final Listener listener;
     private final ChunkAssembler chunks = new ChunkAssembler();
     private JavaScriptReplyProxy proxy;
+    private String currentHeader;
 
     public HostBridge(Listener listener) {
         this.listener = listener;
@@ -51,31 +57,55 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
                               @NonNull Uri sourceOrigin, boolean isMainFrame, @NonNull JavaScriptReplyProxy replyProxy) {
         if (!isMainFrame) return;
         proxy = replyProxy;
+        currentHeader = null;
         try {
             if (message.getType() == WebMessageCompat.TYPE_ARRAY_BUFFER) {
                 HostProtocol.Frame f = HostProtocol.decode(message.getArrayBuffer());
+                currentHeader = f.headerJson;
                 dispatch(f.headerJson, f.payload);
             } else if (message.getType() == WebMessageCompat.TYPE_STRING) {
                 handleText(message.getData());
             }
-        } catch (JSONException | IllegalArgumentException e) {
-            Log.w(TAG, "Dropping malformed host message", e);
+        } catch (JSONException | IllegalArgumentException | OutOfMemoryError e) {
+            Log.w(TAG, "Dropping host message", e);
+            if (e instanceof OutOfMemoryError) chunks.clear();
+            rejectSave(currentHeader, String.valueOf(e.getMessage()));
+        } finally {
+            for (String dropped : chunks.takeDropped()) rejectSave(dropped, "incomplete chunks");
         }
+    }
+
+    /** Answers a {@code save} header with a failure when its ticket is readable; otherwise just logs. */
+    private void rejectSave(String headerJson, String reason) {
+        if (headerJson == null) return;
+        try {
+            JSONObject h = new JSONObject(headerJson);
+            if ("save".equals(h.optString("type")) && h.has("ticket")) {
+                listener.onSaveRejected(h.getLong("ticket"), reason);
+                return;
+            }
+        } catch (JSONException ignored) {
+            // Falls through to the log below.
+        }
+        Log.w(TAG, "Unanswerable malformed message: " + reason);
     }
 
     private void handleText(String text) throws JSONException {
         JSONObject json = new JSONObject(text);
         if (!"chunk".equals(json.optString("type"))) {
-            dispatch(text, new byte[0]);
+            currentHeader = text;
+            dispatch(text, ByteBuffer.allocate(0));
             return;
         }
+        String header = json.getJSONObject("header").toString();
+        currentHeader = header;
         byte[] data = Base64.decode(json.getString("data"), Base64.DEFAULT);
         HostProtocol.Frame frame = chunks.add(json.getLong("id"), json.getInt("index"),
-                json.getInt("chunks"), json.getJSONObject("header").toString(), data);
+                json.getInt("chunks"), header, data);
         if (frame != null) dispatch(frame.headerJson, frame.payload);
     }
 
-    private void dispatch(String headerJson, byte[] bytes) throws JSONException {
+    private void dispatch(String headerJson, ByteBuffer bytes) throws JSONException {
         JSONObject h = new JSONObject(headerJson);
         switch (h.optString("type")) {
             case "ready":

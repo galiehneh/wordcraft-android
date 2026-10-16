@@ -10,11 +10,14 @@ import android.os.Environment;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 
+import com.galiehneh.wordcraft.web.HostProtocol;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.nio.ByteBuffer;
 
 /** Document IO: display names, probing readable URIs, saving to Downloads. Call off the main thread. */
 public final class DocumentRepository {
@@ -55,7 +58,7 @@ public final class DocumentRepository {
     }
 
     /** Legacy behaviour kept until W4: always a new file in Downloads. */
-    public void saveToDownloads(String filename, String mime, byte[] bytes) throws IOException {
+    public void saveToDownloads(String filename, String mime, ByteBuffer bytes) throws IOException {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             ContentResolver resolver = context.getContentResolver();
             ContentValues values = new ContentValues();
@@ -66,7 +69,7 @@ public final class DocumentRepository {
             if (uri == null) throw new IOException("MediaStore insert failed");
             try (OutputStream os = resolver.openOutputStream(uri)) {
                 if (os == null) throw new IOException("No output stream for " + uri);
-                os.write(bytes);
+                HostProtocol.writeTo(os, bytes);
             } catch (IOException e) {
                 resolver.delete(uri, null, null);
                 throw e;
@@ -76,7 +79,7 @@ public final class DocumentRepository {
         File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
         if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot create " + dir);
         try (FileOutputStream fos = new FileOutputStream(new File(dir, filename))) {
-            fos.write(bytes);
+            HostProtocol.writeTo(fos, bytes);
         }
     }
 }

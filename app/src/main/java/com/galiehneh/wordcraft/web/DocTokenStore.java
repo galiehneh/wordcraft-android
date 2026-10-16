@@ -1,7 +1,7 @@
 package com.galiehneh.wordcraft.web;
 
 import java.security.SecureRandom;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 /** One-time tokens mapping {@code /__host/doc/<token>} to a {@link DocSource}. Thread-safe. */
@@ -10,11 +10,11 @@ public final class DocTokenStore {
     private static final int MAX_PENDING = 8;
 
     private final SecureRandom random = new SecureRandom();
-    private final Map<String, DocSource> sources = new HashMap<>();
+    private final Map<String, DocSource> sources = new LinkedHashMap<>();
 
     public synchronized String issue(DocSource source) {
         if (sources.size() >= MAX_PENDING) {
-            // Drop the oldest-inserted-ish entry; stale tokens come from editors that never fetched.
+            // LinkedHashMap iterates in insertion order: drop the oldest (never fetched) token.
             sources.remove(sources.keySet().iterator().next());
         }
         byte[] raw = new byte[TOKEN_BYTES];

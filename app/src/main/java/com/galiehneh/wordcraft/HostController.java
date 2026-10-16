@@ -20,6 +20,7 @@ import com.galiehneh.wordcraft.web.WebViewHost;
 
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -223,7 +224,7 @@ final class HostController implements HostBridge.Listener {
     }
 
     @Override
-    public void onSnapshot(String name, long rev, byte[] docx) {
+    public void onSnapshot(String name, long rev, ByteBuffer docx) {
         if (!state.dirty) return;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
                 name.isEmpty() ? state.name : name, currentSource, rev);
@@ -237,7 +238,7 @@ final class HostController implements HostBridge.Listener {
     }
 
     @Override
-    public void onSave(long ticket, String kind, String name, String mime, byte[] bytes) {
+    public void onSave(long ticket, String kind, String name, String mime, ByteBuffer bytes) {
         String fileName = FileNames.sanitize(name);
         String type = mime.isEmpty() ? MimeMap.of(fileName) : mime;
         HostBridge target = bridge;
@@ -260,8 +261,14 @@ final class HostController implements HostBridge.Listener {
     }
 
     @Override
-    public void onPrint(String name, byte[] pdf) {
-        Log.i(TAG, "print not implemented yet (" + pdf.length + " bytes)");
+    public void onSaveRejected(long ticket, String reason) {
+        if (bridge != null) bridge.sendSaveResult(ticket, "failed", reason);
+        callbacks.toast(R.string.save_failed);
+    }
+
+    @Override
+    public void onPrint(String name, ByteBuffer pdf) {
+        Log.i(TAG, "print not implemented yet (" + pdf.remaining() + " bytes)");
     }
 
     @Override

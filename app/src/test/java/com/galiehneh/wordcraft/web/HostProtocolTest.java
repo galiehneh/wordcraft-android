@@ -2,11 +2,29 @@ package com.galiehneh.wordcraft.web;
 
 import static org.junit.Assert.assertArrayEquals;
 import static org.junit.Assert.assertEquals;
+import static org.junit.Assert.assertSame;
 
 import java.nio.charset.StandardCharsets;
 import org.junit.Test;
 
 public class HostProtocolTest {
+    private static byte[] bytes(HostProtocol.Frame f) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            HostProtocol.writeTo(out, f.payload);
+        } catch (java.io.IOException e) {
+            throw new AssertionError(e);
+        }
+        return out.toByteArray();
+    }
+
+    @Test
+    public void payloadIsViewOverSourceFrame() {
+        byte[] frame = HostProtocol.encode("{}", new byte[] {5, 6});
+        HostProtocol.Frame f = HostProtocol.decode(frame);
+        assertSame(frame, f.payload.array());
+    }
+
     @Test
     public void roundTripPreservesHeaderAndPayload() {
         byte[] payload = {0, 1, 2, (byte) 0xFF, 127};
@@ -15,7 +33,7 @@ public class HostProtocolTest {
         HostProtocol.Frame f = HostProtocol.decode(HostProtocol.encode(header, payload));
 
         assertEquals(header, f.headerJson);
-        assertArrayEquals(payload, f.payload);
+        assertArrayEquals(payload, bytes(f));
     }
 
     @Test
@@ -31,8 +49,8 @@ public class HostProtocolTest {
 
     @Test
     public void emptyPayloadAndNullPayloadDecodeToEmpty() {
-        assertEquals(0, HostProtocol.decode(HostProtocol.encode("{}", null)).payload.length);
-        assertEquals(0, HostProtocol.decode(HostProtocol.encode("{}", new byte[0])).payload.length);
+        assertEquals(0, HostProtocol.decode(HostProtocol.encode("{}", null)).payload.remaining());
+        assertEquals(0, HostProtocol.decode(HostProtocol.encode("{}", new byte[0])).payload.remaining());
     }
 
     @Test
@@ -51,7 +69,7 @@ public class HostProtocolTest {
         HostProtocol.Frame f = HostProtocol.decode(frame);
 
         assertEquals("{}", f.headerJson);
-        assertArrayEquals(new byte[] {42}, f.payload);
+        assertArrayEquals(new byte[] {42}, bytes(f));
     }
 
     @Test(expected = IllegalArgumentException.class)

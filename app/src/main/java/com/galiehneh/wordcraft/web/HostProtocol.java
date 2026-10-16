@@ -1,9 +1,10 @@
 package com.galiehneh.wordcraft.web;
 
+import java.io.IOException;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 
 /**
  * Frame codec for JS to native binary messages: {@code [u32 LE headerLen][header JSON UTF-8][payload]}.
@@ -17,9 +18,10 @@ public final class HostProtocol {
     /** Decoded frame. */
     public static final class Frame {
         public final String headerJson;
-        public final byte[] payload;
+        /** View over the received bytes (no copy); position 0 is the first payload byte. */
+        public final ByteBuffer payload;
 
-        public Frame(String headerJson, byte[] payload) {
+        public Frame(String headerJson, ByteBuffer payload) {
             this.headerJson = headerJson;
             this.payload = payload;
         }
@@ -48,6 +50,11 @@ public final class HostProtocol {
         }
         int headerEnd = LENGTH_PREFIX + (int) headerLen;
         String header = new String(frame, LENGTH_PREFIX, (int) headerLen, StandardCharsets.UTF_8);
-        return new Frame(header, Arrays.copyOfRange(frame, headerEnd, frame.length));
+        return new Frame(header, ByteBuffer.wrap(frame, headerEnd, frame.length - headerEnd).slice());
+    }
+
+    /** Writes the remaining bytes of an array-backed buffer without copying. */
+    public static void writeTo(OutputStream out, ByteBuffer buf) throws IOException {
+        out.write(buf.array(), buf.arrayOffset() + buf.position(), buf.remaining());
     }
 }

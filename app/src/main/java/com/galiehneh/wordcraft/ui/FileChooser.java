@@ -13,6 +13,8 @@ import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
 import androidx.activity.result.contract.ActivityResultContracts;
 
+import com.galiehneh.wordcraft.R;
+
 /** SAF document picker: WebView file chooser requests and the direct "open document" button. */
 public final class FileChooser {
     private static final String TAG = "WordCraft";
@@ -77,7 +79,7 @@ public final class FileChooser {
             chooserLauncher.launch(intent);
         } catch (ActivityNotFoundException e) {
             try {
-                chooserLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), "Pilih Dokumen"));
+                chooserLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), activity.getString(R.string.choose_document)));
             } catch (Exception ex) {
                 Log.e(TAG, "Cannot launch file chooser", ex);
                 if (filePathCallback != null) {
@@ -90,14 +92,22 @@ public final class FileChooser {
         return true;
     }
 
+    /** Releases a pending WebView chooser request so the page is not left waiting. */
+    public void cancelPending() {
+        if (filePathCallback != null) {
+            filePathCallback.onReceiveValue(null);
+            filePathCallback = null;
+        }
+    }
+
     public void openDirect() {
         try {
             directLauncher.launch(openIntent(Intent.ACTION_OPEN_DOCUMENT));
         } catch (ActivityNotFoundException e) {
             try {
-                directLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), "Pilih Dokumen"));
+                directLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), activity.getString(R.string.choose_document)));
             } catch (Exception ex) {
-                Toast.makeText(activity, "Tidak ada aplikasi pemilih berkas", Toast.LENGTH_SHORT).show();
+                Toast.makeText(activity, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
             }
         }
     }

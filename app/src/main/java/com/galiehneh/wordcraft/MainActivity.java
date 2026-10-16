@@ -39,6 +39,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     private TextView fab;
     private HostController controller;
     private WebViewHost webViewHost;
+    private FileChooser fileChooser;
     private OnBackPressedCallback backCallback;
     private final CrashLimiter crashLimiter = new CrashLimiter(MAX_CRASHES, CRASH_WINDOW_MS);
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -56,7 +57,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         setContentView(root);
 
         controller = new HostController(this, this);
-        FileChooser fileChooser = new FileChooser(this, new FileChooser.Listener() {
+        fileChooser = new FileChooser(this, new FileChooser.Listener() {
             @Override
             public void onChooserSelected() {
                 // No-op: FAB visibility follows editor state only.
@@ -120,6 +121,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     protected void onDestroy() {
         handler.removeCallbacksAndMessages(null);
         controller.shutdown();
+        fileChooser.cancelPending();
         destroyWebView();
         super.onDestroy();
     }
@@ -234,7 +236,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
 
     private TextView createFabButton() {
         TextView button = new TextView(this);
-        button.setText("Buka Dokumen");
+        button.setText(R.string.open_document);
         button.setTextColor(Color.WHITE);
         button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
         button.setTypeface(null, android.graphics.Typeface.BOLD);

@@ -2,7 +2,6 @@ package com.galiehneh.wordcraft.web;
 
 import android.annotation.SuppressLint;
 import android.net.Uri;
-import android.view.MotionEvent;
 import android.view.View;
 import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
@@ -70,13 +69,6 @@ public final class WebViewHost {
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.requestFocus(View.FOCUS_DOWN);
-        webView.setOnTouchListener((v, event) -> {
-            int action = event.getAction();
-            if ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) && !v.hasFocus()) {
-                v.requestFocus();
-            }
-            return false;
-        });
 
         webView.setWebViewClient(new AssetClient());
         webView.setWebChromeClient(new WebChromeClient() {

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="open_failed">Tidak dapat membuka dokumen</string>
+    <string name="saved_to_downloads">Disimpan ke Unduhan: %1$s</string>
+    <string name="save_failed">Tidak dapat menyimpan berkas</string>
+    <string name="no_app_for_link">Tidak ada aplikasi yang dapat membuka tautan ini</string>
+    <string name="webview_unsupported">WebView perangkat ini terlalu lama. Perbarui Android System WebView lalu coba lagi.</string>
+    <string name="renderer_failed">Editor berhenti berulang kali. Tutup aplikasi lalu buka kembali.</string>
+    <string name="open_document">Buka Dokumen</string>
+    <string name="choose_document">Pilih Dokumen</string>
+    <string name="no_file_picker">Tidak ada aplikasi pemilih berkas</string>
+</resources>

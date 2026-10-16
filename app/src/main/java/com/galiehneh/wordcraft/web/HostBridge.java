@@ -1,88 +1,148 @@
 package com.galiehneh.wordcraft.web;
 
-import android.app.Activity;
-import android.content.Context;
+import android.net.Uri;
 import android.util.Base64;
 import android.util.Log;
-import android.view.HapticFeedbackConstants;
-import android.view.inputmethod.InputMethodManager;
-import android.webkit.JavascriptInterface;
 import android.webkit.WebView;
-import android.widget.Toast;
 
-import com.galiehneh.wordcraft.io.DocumentRepository;
+import androidx.annotation.NonNull;
+import androidx.webkit.JavaScriptReplyProxy;
+import androidx.webkit.WebMessageCompat;
+import androidx.webkit.WebViewCompat;
 
-/** Legacy JS bridge exposed as {@code WordCraftAndroid}. */
-public final class HostBridge {
+import org.json.JSONException;
+import org.json.JSONObject;
+
+/** Receives {@code WordCraftHost} messages (docs/host-protocol.md) and posts events back to JS. */
+public final class HostBridge implements WebViewCompat.WebMessageListener {
     private static final String TAG = "WordCraft";
 
-    /** Notifications to the host activity (invoked on the UI thread). */
+    /** Parsed JS messages, delivered on the UI thread. {@code bytes} is never null. */
     public interface Listener {
-        void onDocumentOpened(boolean opened);
+        void onReady();
+
+        void onState(HostState state);
+
+        void onSave(long ticket, String kind, String name, String mime, byte[] bytes);
+
+        void onSnapshot(String name, long rev, byte[] docx);
+
+        void onPrint(String name, byte[] pdf);
+
+        void onIme(boolean visible);
+
+        void onPickOpen();
+
+        void onOpenExternal(String url);
+
+        void onBackResult(boolean handled);
     }
 
-    private final Activity activity;
-    private final WebView webView;
-    private final DocumentRepository documents;
     private final Listener listener;
+    private final ChunkAssembler chunks = new ChunkAssembler();
+    private JavaScriptReplyProxy proxy;
 
-    public HostBridge(Activity activity, WebView webView, DocumentRepository documents, Listener listener) {
-        this.activity = activity;
-        this.webView = webView;
-        this.documents = documents;
+    public HostBridge(Listener listener) {
         this.listener = listener;
     }
 
-    @JavascriptInterface
-    public void showKeyboard() {
-        activity.runOnUiThread(() -> {
-            webView.requestFocus();
-            InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                boolean ok = imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
-                if (!ok) {
-                    ok = imm.showSoftInput(webView, 0);
-                }
-                if (!ok) {
-                    imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
-                }
-            }
-        });
-    }
-
-    @JavascriptInterface
-    public void hideKeyboard() {
-        activity.runOnUiThread(() -> {
-            InputMethodManager imm = (InputMethodManager) activity.getSystemService(Context.INPUT_METHOD_SERVICE);
-            if (imm != null) {
-                imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
-            }
-        });
-    }
-
-    @JavascriptInterface
-    public void setDocumentOpened(boolean opened) {
-        activity.runOnUiThread(() -> listener.onDocumentOpened(opened));
-    }
-
-    @JavascriptInterface
-    public void saveBlob(String dataUrl, String filename) {
-        if (dataUrl == null || !dataUrl.contains(",")) return;
-        String base64Data = dataUrl.substring(dataUrl.indexOf(",") + 1);
+    @Override
+    public void onPostMessage(@NonNull WebView view, @NonNull WebMessageCompat message,
+                              @NonNull Uri sourceOrigin, boolean isMainFrame, @NonNull JavaScriptReplyProxy replyProxy) {
+        if (!isMainFrame) return;
+        proxy = replyProxy;
         try {
-            byte[] bytes = Base64.decode(base64Data, Base64.DEFAULT);
-            String safeName = (filename != null && !filename.isEmpty()) ? filename : "document.docx";
-            boolean saved = documents.saveToDownloads(safeName, bytes);
-            activity.runOnUiThread(() -> {
-                if (saved) {
-                    activity.getWindow().getDecorView().performHapticFeedback(HapticFeedbackConstants.LONG_PRESS);
-                    Toast.makeText(activity, "Berhasil disimpan ke Download: " + safeName, Toast.LENGTH_LONG).show();
-                } else {
-                    Toast.makeText(activity, "Gagal menyimpan berkas", Toast.LENGTH_SHORT).show();
-                }
-            });
-        } catch (Exception e) {
-            Log.e(TAG, "Failed saving blob", e);
+            if (message.getType() == WebMessageCompat.TYPE_ARRAY_BUFFER) {
+                HostProtocol.Frame f = HostProtocol.decode(message.getArrayBuffer());
+                dispatch(f.headerJson, f.payload);
+            } else if (message.getType() == WebMessageCompat.TYPE_STRING) {
+                handleText(message.getData());
+            }
+        } catch (JSONException | IllegalArgumentException e) {
+            Log.w(TAG, "Dropping malformed host message", e);
+        }
+    }
+
+    private void handleText(String text) throws JSONException {
+        JSONObject json = new JSONObject(text);
+        if (!"chunk".equals(json.optString("type"))) {
+            dispatch(text, new byte[0]);
+            return;
+        }
+        byte[] data = Base64.decode(json.getString("data"), Base64.DEFAULT);
+        HostProtocol.Frame frame = chunks.add(json.getLong("id"), json.getInt("index"),
+                json.getInt("chunks"), json.getJSONObject("header").toString(), data);
+        if (frame != null) dispatch(frame.headerJson, frame.payload);
+    }
+
+    private void dispatch(String headerJson, byte[] bytes) throws JSONException {
+        JSONObject h = new JSONObject(headerJson);
+        switch (h.optString("type")) {
+            case "ready":
+                listener.onReady();
+                break;
+            case "state":
+                listener.onState(new HostState(h.optBoolean("dirty"), h.optBoolean("hasDocument"),
+                        h.optBoolean("editMode"), h.optBoolean("backstage"), h.optBoolean("dialog"),
+                        h.optString("name", ""), h.optLong("rev", 0)));
+                break;
+            case "save":
+                listener.onSave(h.getLong("ticket"), h.optString("kind", "save"), h.optString("name", ""),
+                        h.optString("mime", ""), bytes);
+                break;
+            case "snapshot":
+                listener.onSnapshot(h.optString("name", ""), h.optLong("rev", 0), bytes);
+                break;
+            case "print":
+                listener.onPrint(h.optString("name", ""), bytes);
+                break;
+            case "ime":
+                listener.onIme(h.optBoolean("visible"));
+                break;
+            case "pickOpen":
+                listener.onPickOpen();
+                break;
+            case "openExternal":
+                listener.onOpenExternal(h.optString("url", ""));
+                break;
+            case "backResult":
+                listener.onBackResult(h.optBoolean("handled"));
+                break;
+            default:
+                Log.w(TAG, "Unknown host message: " + h.optString("type"));
+        }
+    }
+
+    public void sendOpen(String url, String name) {
+        send("open", "url", url, "name", name);
+    }
+
+    public void sendSaveResult(long ticket, String outcome, String message) {
+        send("saveResult", "ticket", ticket, "outcome", outcome, "message", message);
+    }
+
+    public void sendBack() {
+        send("back");
+    }
+
+    public void sendSnapshotNow() {
+        send("snapshotNow");
+    }
+
+    /** Posts {@code {"type":type, k1:v1, ...}} to the page; dropped (logged) before the first message. */
+    private void send(String type, Object... keyValues) {
+        if (proxy == null) {
+            Log.w(TAG, "Host event dropped before ready: " + type);
+            return;
+        }
+        try {
+            JSONObject json = new JSONObject().put("type", type);
+            for (int i = 0; i < keyValues.length; i += 2) {
+                json.put((String) keyValues[i], keyValues[i + 1]);
+            }
+            proxy.postMessage(json.toString());
+        } catch (JSONException e) {
+            throw new IllegalStateException(e);
         }
     }
 }

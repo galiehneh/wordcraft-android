@@ -514,8 +514,13 @@ public class MainActivity extends Activity {
                     webView.requestFocus();
                     InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
                     if (imm != null) {
-                        imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
-                        imm.showSoftInput(webView, 0);
+                        boolean ok = imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+                        if (!ok) {
+                            ok = imm.showSoftInput(webView, 0);
+                        }
+                        if (!ok) {
+                            imm.toggleSoftInput(InputMethodManager.SHOW_FORCED, 0);
+                        }
                     }
                 }
             });

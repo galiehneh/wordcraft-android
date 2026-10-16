@@ -1,7 +1,6 @@
 package com.galiehneh.wordcraft.ui;
 
 import android.app.Activity;
-import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
 import android.net.Uri;
@@ -48,7 +47,9 @@ public final class DocumentPickers {
     public void create(String suggestedName, String mime) {
         try {
             createLauncher.launch(new String[]{suggestedName, mime});
-        } catch (ActivityNotFoundException e) {
+        } catch (RuntimeException e) {
+            // No picker (ActivityNotFoundException) or a launch failure: clear the pending target
+            // and answer the editor's ticket as cancelled.
             listener.onCreateResult(null);
             Toast.makeText(context, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
         }
@@ -57,7 +58,7 @@ public final class DocumentPickers {
     public void open() {
         try {
             openLauncher.launch(MimeMap.OPEN_TYPES);
-        } catch (ActivityNotFoundException e) {
+        } catch (RuntimeException e) {
             Toast.makeText(context, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
         }
     }

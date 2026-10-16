@@ -1,12 +1,14 @@
 package com.galiehneh.wordcraft;
 
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
-import android.util.Log;
+import android.os.Handler;
+import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.HapticFeedbackConstants;
@@ -20,160 +22,208 @@ import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 
-import com.galiehneh.wordcraft.io.DocumentRepository;
 import com.galiehneh.wordcraft.ui.FileChooser;
 import com.galiehneh.wordcraft.ui.InsetsController;
-import com.galiehneh.wordcraft.web.HostBridge;
+import com.galiehneh.wordcraft.web.CrashLimiter;
+import com.galiehneh.wordcraft.web.HostState;
 import com.galiehneh.wordcraft.web.WebViewHost;
 
-/** Single-activity host: wires the WebView, document intents, FAB and double-back exit. */
-public class MainActivity extends ComponentActivity {
-    private static final String TAG = "WordCraft";
-    private static final long EXIT_WINDOW_MS = 2000;
+/** Single-activity host: wires the WebView, document intents, Back and renderer recovery. */
+public class MainActivity extends ComponentActivity implements HostController.Callbacks, WebViewHost.Callbacks {
+    private static final int MAX_CRASHES = 2;
+    private static final long CRASH_WINDOW_MS = 60_000;
 
+    private FrameLayout root;
     private WebView webView;
     private TextView fab;
-    private DocumentRepository documents;
-    private long backPressedTime = 0;
-    private Toast exitToast = null;
+    private HostController controller;
+    private WebViewHost webViewHost;
+    private OnBackPressedCallback backCallback;
+    private final CrashLimiter crashLimiter = new CrashLimiter(MAX_CRASHES, CRASH_WINDOW_MS);
+    private final Handler handler = new Handler(Looper.getMainLooper());
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
 
-        FrameLayout rootLayout = new FrameLayout(this);
-        rootLayout.setLayoutParams(new ViewGroup.LayoutParams(
+        root = new FrameLayout(this);
+        root.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        InsetsController.apply(rootLayout);
-
-        webView = new WebView(this);
-        webView.setLayoutParams(new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        rootLayout.addView(webView);
-
+        InsetsController.apply(root);
         fab = createFabButton();
-        rootLayout.addView(fab);
-        setContentView(rootLayout);
+        root.addView(fab);
+        setContentView(root);
 
-        documents = new DocumentRepository(this);
+        controller = new HostController(this, this);
         FileChooser fileChooser = new FileChooser(this, new FileChooser.Listener() {
             @Override
             public void onChooserSelected() {
-                fab.setVisibility(View.GONE);
+                // No-op: FAB visibility follows editor state only.
             }
 
             @Override
             public void onDocumentPicked(Uri uri) {
-                handleDocumentUri(uri);
+                controller.openUri(uri);
             }
         });
-        HostBridge bridge = new HostBridge(this, webView, documents,
-                opened -> fab.setVisibility(opened ? View.GONE : View.VISIBLE));
-        new WebViewHost(this, webView, fileChooser).configure(bridge);
+        webViewHost = new WebViewHost(this, controller.tokens(), this, fileChooser);
         fab.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
             fileChooser.openDirect();
         });
 
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+        backCallback = new OnBackPressedCallback(false) {
             @Override
             public void handleOnBackPressed() {
-                onBack(this);
+                controller.requestBack();
             }
-        });
+        };
+        getOnBackPressedDispatcher().addCallback(this, backCallback);
 
         Intent intent = getIntent();
-        if (intent != null && hasDocumentAction(intent)) {
-            handleIncomingIntent(intent);
-        } else if (savedInstanceState == null) {
-            webView.loadUrl(WebViewHost.BASE_URL);
-        } else {
-            webView.restoreState(savedInstanceState);
+        if (intent != null && IntentRouter.shouldHandleLaunch(intent.getAction(), savedInstanceState != null)) {
+            openFromIntent(intent, true);
         }
+        createWebView();
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        if (intent != null && hasDocumentAction(intent)) {
-            handleIncomingIntent(intent);
+        if (intent != null && IntentRouter.isDocumentAction(intent.getAction())) {
+            openFromIntent(intent, false);
         }
     }
 
     @Override
-    protected void onSaveInstanceState(Bundle outState) {
-        super.onSaveInstanceState(outState);
-        if (webView != null) {
-            webView.saveState(outState);
-        }
+    protected void onResume() {
+        super.onResume();
+        if (webView != null) webView.onResume();
     }
 
-    private boolean hasDocumentAction(Intent intent) {
-        String action = intent.getAction();
-        return Intent.ACTION_VIEW.equals(action) || Intent.ACTION_SEND.equals(action);
+    @Override
+    protected void onPause() {
+        controller.snapshotNow();
+        if (webView != null) webView.onPause();
+        super.onPause();
     }
 
-    private void handleIncomingIntent(Intent intent) {
-        Uri targetUri = null;
-        String action = intent.getAction();
-        if (Intent.ACTION_VIEW.equals(action)) {
-            targetUri = intent.getData();
-        } else if (Intent.ACTION_SEND.equals(action)) {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                targetUri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
-            } else {
-                targetUri = (Uri) intent.getParcelableExtra(Intent.EXTRA_STREAM);
-            }
-        }
-        if (targetUri != null) {
-            handleDocumentUri(targetUri);
-        }
+    @Override
+    protected void onDestroy() {
+        handler.removeCallbacksAndMessages(null);
+        controller.shutdown();
+        destroyWebView();
+        super.onDestroy();
     }
 
-    private void handleDocumentUri(Uri uri) {
-        try {
-            String name = documents.displayName(uri);
-            documents.copyToCache(uri);
-            String url = WebViewHost.BASE_URL + "?file=/doc/" + Uri.encode(name) + "&t=" + System.currentTimeMillis();
-            webView.loadUrl(url);
-            fab.setVisibility(View.GONE);
-            getWindow().getDecorView().performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-            Toast.makeText(this, "Membuka: " + name, Toast.LENGTH_SHORT).show();
-        } catch (Exception e) {
-            Log.e(TAG, "Error handling Document URI: " + uri, e);
-            Toast.makeText(this, "Gagal memproses berkas dokumen", Toast.LENGTH_SHORT).show();
-        }
-    }
+    // WebView lifecycle -------------------------------------------------------------------------
 
-    private void onBack(OnBackPressedCallback callback) {
-        webView.evaluateJavascript("window.handleAndroidBack && window.handleAndroidBack();", null);
-        if (fab.getVisibility() == View.GONE) {
-            fab.setVisibility(View.VISIBLE);
-            webView.loadUrl(WebViewHost.BASE_URL);
-            webView.clearHistory();
-            backPressedTime = 0;
-            Toast.makeText(this, "Kembali ke Beranda", Toast.LENGTH_SHORT).show();
+    private void createWebView() {
+        webView = new WebView(this);
+        webView.setLayoutParams(new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        root.addView(webView, 0);
+        if (!webViewHost.configure(webView, controller.newBridge())) {
+            showFatal(R.string.webview_unsupported);
             return;
         }
+        webView.loadUrl(WebViewHost.BASE_URL);
+    }
 
-        long now = System.currentTimeMillis();
-        if (now - backPressedTime < EXIT_WINDOW_MS) {
-            if (exitToast != null) {
-                exitToast.cancel();
+    private void destroyWebView() {
+        if (webView == null) return;
+        root.removeView(webView);
+        webView.destroy();
+        webView = null;
+    }
+
+    @Override
+    public void onRenderGone() {
+        // Never destroy a WebView from inside its own callback.
+        handler.post(() -> {
+            destroyWebView();
+            if (crashLimiter.recordAndAllowRetry(System.currentTimeMillis())) {
+                createWebView();
+            } else {
+                showFatal(R.string.renderer_failed);
             }
-            callback.setEnabled(false);
-            getOnBackPressedDispatcher().onBackPressed();
+        });
+    }
+
+    private void showFatal(int messageRes) {
+        root.removeAllViews();
+        TextView message = new TextView(this);
+        message.setText(messageRes);
+        message.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16);
+        message.setGravity(Gravity.CENTER);
+        message.setPadding(dpToPx(24), dpToPx(24), dpToPx(24), dpToPx(24));
+        root.addView(message, new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
+        backCallback.setEnabled(false);
+    }
+
+    // Intents -----------------------------------------------------------------------------------
+
+    private void openFromIntent(Intent intent, boolean atLaunch) {
+        Uri uri = null;
+        if (Intent.ACTION_VIEW.equals(intent.getAction())) {
+            uri = intent.getData();
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            uri = intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri.class);
         } else {
-            backPressedTime = now;
-            if (exitToast != null) {
-                exitToast.cancel();
-            }
-            exitToast = Toast.makeText(this, "Tekan sekali lagi untuk keluar", Toast.LENGTH_SHORT);
-            exitToast.show();
-            getWindow().getDecorView().performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
+            uri = intent.getParcelableExtra(Intent.EXTRA_STREAM);
+        }
+        if (uri == null) {
+            toast(R.string.open_failed);
+            return;
+        }
+        if (atLaunch) controller.expectLaunchOpen();
+        controller.openUri(uri);
+    }
+
+    // HostController.Callbacks ----------------------------------------------------------------
+
+    @Override
+    public void onStateChanged(HostState state) {
+        backCallback.setEnabled(state.wantsBack());
+        fab.setVisibility(state.hasDocument ? View.GONE : View.VISIBLE);
+    }
+
+    @Override
+    public void exit(boolean dirty) {
+        if (dirty) {
+            moveTaskToBack(true);
+        } else {
+            finish();
         }
     }
+
+    @Override
+    public void toast(int resId, Object... args) {
+        Toast.makeText(this, getString(resId, args), Toast.LENGTH_SHORT).show();
+    }
+
+    @Override
+    public void openExternal(Uri uri) {
+        onExternalUrl(uri);
+    }
+
+    @Override
+    public void onExternalUrl(Uri uri) {
+        try {
+            startActivity(new Intent(Intent.ACTION_VIEW, uri));
+        } catch (ActivityNotFoundException e) {
+            toast(R.string.no_app_for_link);
+        }
+    }
+
+    @Override
+    public void pickOpen() {
+        fab.performClick();
+    }
+
+    // FAB ---------------------------------------------------------------------------------------
 
     private TextView createFabButton() {
         TextView button = new TextView(this);

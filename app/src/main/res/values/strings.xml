@@ -1,4 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">WordCraft</string>
+    <string name="open_failed">Could not open the document</string>
+    <string name="saved_to_downloads">Saved to Downloads: %1$s</string>
+    <string name="save_failed">Could not save the file</string>
+    <string name="no_app_for_link">No app can open this link</string>
+    <string name="webview_unsupported">This device\'s WebView is too old. Update Android System WebView and try again.</string>
+    <string name="renderer_failed">The editor stopped repeatedly. Close the app and open it again.</string>
 </resources>

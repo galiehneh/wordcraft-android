@@ -28,9 +28,13 @@ Fallback bila `WEB_MESSAGE_ARRAY_BUFFER` tak didukung: payload base64 per chunk 
 | `openExternal` | `url` | - |
 | `backResult` | `handled` (bool) | - |
 
+Fallback base64 (bila `WEB_MESSAGE_ARRAY_BUFFER` tak didukung): pesan teks JSON `{"type":"chunk","id":<u32>,"index":<n>,"chunks":<n>,"header":{...pesan asli},"data":"<base64, maks 512 KB mentah>"}`; host merakit per `id`, lalu memperlakukan sebagai pesan biner bertipe `header.type`.
+
+Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counter naik monoton; dikirim di `state` dan `snapshot`). `state` memuat `rev` dan `name` terbaru; `wordcraft_snapshot_now` hanya mengembalikan bytes, header `snapshot` memakai `name`/`rev` dari `state` terakhir.
+
 ## native -> JS
 
-`replyProxy.postMessage(json)` -> `window.wordcraftHostEvent(msg)` -> export wasm.
+`replyProxy.postMessage(json)` -> `window.wordcraftHostEvent(msg)` -> export wasm. Kunci pembeda event selalu `type`. Event tak dikenal -> `console.warn`. Dispatcher mengantre event sampai `window.wasmBindings` ada; `ready` diposting dari JS setelah `TrunkApplicationStarted`.
 
 | event | field | efek |
 |---|---|---|

@@ -78,12 +78,23 @@ public final class DocumentRepository {
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == PackageManager.PERMISSION_GRANTED;
     }
 
-    /** Probes {@code uri} and describes it as a save target; optionally keeps its grant. */
-    public CurrentDoc describeForOpen(Uri uri, boolean persist) throws IOException {
+    /** Probes {@code uri} (and with {@code sniff} validates extension and magic) and describes it as a save target; optionally keeps its grant. */
+    public CurrentDoc describeForOpen(Uri uri, boolean persist, boolean sniff) throws IOException {
         String name = displayName(uri);
+        if (sniff) requireSupported(uri, name);
         probe(uri);
         if (persist) persistAccess(uri);
         return new CurrentDoc(uri.toString(), name, canWrite(uri));
+    }
+
+    private void requireSupported(Uri uri, String name) throws IOException {
+        byte[] head = new byte[FileSniffer.HEAD_BYTES];
+        int length = 0;
+        try (InputStream in = openStream(uri)) {
+            int n;
+            while (length < head.length && (n = in.read(head, length, head.length - length)) > 0) length += n;
+        }
+        if (!FileSniffer.isSupported(name, head, length)) throw new UnsupportedFileException(name);
     }
 
     /** The original file is a save target again only while its write grant survived. */

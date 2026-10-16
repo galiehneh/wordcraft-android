@@ -11,4 +11,5 @@
     <string name="choose_document">Choose document</string>
     <string name="no_file_picker">No file picker app available</string>
     <string name="print_failed">Could not print the document</string>
+    <string name="unsupported_file">This file type is not supported</string>
 </resources>

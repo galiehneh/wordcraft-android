@@ -198,7 +198,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
             return;
         }
         if (atLaunch) controller.expectLaunchOpen();
-        controller.openUri(uri, false);
+        controller.openUri(uri, false, IntentRouter.needsSniff(intent.getType()));
     }
 
     private boolean isPrivateFile(Uri uri) {

@@ -27,13 +27,11 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
-            <!-- Intent filter: Buka berkas Dokumen via MIME Type (DOCX, DOC, ODT, RTF, TXT, MD, HTML, PDF) -->
+            <!-- Buka dokumen (VIEW) dari content:// saja: tanpa file://, BROWSABLE, atau PDF. -->
             <intent-filter android:label="@string/app_name">
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
                 <data android:scheme="content" />
-                <data android:scheme="file" />
                 <data android:mimeType="application/vnd.openxmlformats-officedocument.wordprocessingml.document" />
                 <data android:mimeType="application/msword" />
                 <data android:mimeType="application/vnd.oasis.opendocument.text" />
@@ -42,32 +40,8 @@
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/html" />
-                <data android:mimeType="application/pdf" />
+                <!-- Dicek ekstensi + magic di IntentRouter sebelum dibuka. -->
                 <data android:mimeType="application/octet-stream" />
-            </intent-filter>
-
-            <!-- Intent filter: Buka berkas Dokumen via Ekstensi File -->
-            <intent-filter android:label="@string/app_name">
-                <action android:name="android.intent.action.VIEW" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <category android:name="android.intent.category.BROWSABLE" />
-                <data android:scheme="content" />
-                <data android:scheme="file" />
-                <data android:host="*" />
-                <data android:pathPattern=".*\\.docx" />
-                <data android:pathPattern=".*\\..*\\.docx" />
-                <data android:pathPattern=".*\\.doc" />
-                <data android:pathPattern=".*\\..*\\.doc" />
-                <data android:pathPattern=".*\\.odt" />
-                <data android:pathPattern=".*\\..*\\.odt" />
-                <data android:pathPattern=".*\\.rtf" />
-                <data android:pathPattern=".*\\..*\\.rtf" />
-                <data android:pathPattern=".*\\.txt" />
-                <data android:pathPattern=".*\\..*\\.txt" />
-                <data android:pathPattern=".*\\.md" />
-                <data android:pathPattern=".*\\..*\\.md" />
-                <data android:pathPattern=".*\\.pdf" />
-                <data android:pathPattern=".*\\..*\\.pdf" />
             </intent-filter>
 
             <!-- Intent filter: Terima berkas Dokumen via menu SHARE -->
@@ -82,7 +56,6 @@
                 <data android:mimeType="text/plain" />
                 <data android:mimeType="text/markdown" />
                 <data android:mimeType="text/html" />
-                <data android:mimeType="application/pdf" />
             </intent-filter>
 
         </activity>

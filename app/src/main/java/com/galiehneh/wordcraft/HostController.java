@@ -10,6 +10,7 @@ import com.galiehneh.wordcraft.io.CurrentDoc;
 import com.galiehneh.wordcraft.io.DocumentRepository;
 import com.galiehneh.wordcraft.io.RecoveryPolicy;
 import com.galiehneh.wordcraft.io.RecoveryStore;
+import com.galiehneh.wordcraft.io.UnsupportedFileException;
 import com.galiehneh.wordcraft.web.DocSource;
 import com.galiehneh.wordcraft.web.DocTokenStore;
 import com.galiehneh.wordcraft.web.HostBridge;
@@ -99,13 +100,14 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     /** Opens a document chosen in the SAF picker: keeps its grant across restarts. */
     void onPicked(Uri uri) {
-        openUri(uri, true);
+        openUri(uri, true, false);
     }
 
-    void openUri(Uri uri, boolean persist) {
+    /** @param sniff validate extension and content first (generic MIME type from an external app) */
+    void openUri(Uri uri, boolean persist, boolean sniff) {
         runIo(() -> {
             try {
-                CurrentDoc doc = documents.describeForOpen(uri, persist);
+                CurrentDoc doc = documents.describeForOpen(uri, persist, sniff);
                 DocSource source = () -> documents.openStream(uri);
                 main.post(() -> queueOpen(new PendingOpen(source, doc.name, doc.uri, false, doc)));
             } catch (IOException | SecurityException e) {
@@ -113,7 +115,8 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
                 main.post(() -> {
                     if (destroyed) return;
                     launchOpenExpected = false;
-                    callbacks.toast(R.string.open_failed);
+                    callbacks.toast(e instanceof UnsupportedFileException
+                            ? R.string.unsupported_file : R.string.open_failed);
                     if (ready) restoreRecovery();
                 });
             }

@@ -10,6 +10,11 @@ final class IntentRouter {
         return Intent.ACTION_VIEW.equals(action) || Intent.ACTION_SEND.equals(action);
     }
 
+    /** Generic or missing MIME types say nothing about the content: validate extension and magic. */
+    static boolean needsSniff(String mimeType) {
+        return mimeType == null || mimeType.isEmpty() || "application/octet-stream".equalsIgnoreCase(mimeType);
+    }
+
     /** A recreated activity (process death) must not re-handle the intent that started it. */
     static boolean shouldHandleLaunch(String action, boolean hasSavedState) {
         return !hasSavedState && isDocumentAction(action);

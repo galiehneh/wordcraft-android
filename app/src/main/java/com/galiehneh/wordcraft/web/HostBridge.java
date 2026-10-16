@@ -69,9 +69,9 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
                 handleText(message.getData());
             }
         } catch (JSONException | IllegalArgumentException | OutOfMemoryError e) {
-            Log.w(TAG, "Dropping host message", e);
+            Log.w(TAG, "Dropping host message: " + e.getClass().getSimpleName());
             if (e instanceof OutOfMemoryError) chunks.clear();
-            rejectSave(currentHeader, String.valueOf(e.getMessage()));
+            rejectSave(currentHeader, e.getClass().getSimpleName());
         } finally {
             for (String dropped : chunks.takeDropped()) rejectSave(dropped, "incomplete chunks");
         }
@@ -116,7 +116,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
             case "state":
                 listener.onState(new HostState(h.optBoolean("dirty"), h.optBoolean("hasDocument"),
                         h.optBoolean("editMode"), h.optBoolean("backstage"), h.optBoolean("dialog"),
-                        h.optString("name", ""), h.optLong("rev", 0)));
+                        h.optString("name", ""), h.optLong("rev", 0), h.optBoolean("encrypted", false)));
                 break;
             case "save":
                 listener.onSave(h.getLong("ticket"), h.optString("kind", ""), h.optString("name", ""),

@@ -16,6 +16,8 @@ public final class RecoveryPolicy {
     private boolean restoreInFlight;
     private boolean opening;
     private boolean savedWhileDirty;
+    /** Written on the main thread, read by the IO thread that takes in-place backups. */
+    private volatile boolean encrypted;
 
     /** A fresh page sent {@code ready}: nothing may be cleared until a document shows up. */
     public void onReady() {
@@ -24,6 +26,7 @@ public final class RecoveryPolicy {
         restoreInFlight = false;
         opening = false;
         savedWhileDirty = false;
+        encrypted = false;
     }
 
     /** @return true if the caller should read recovery metadata and try to restore. */
@@ -71,10 +74,17 @@ public final class RecoveryPolicy {
         if (!"export".equals(kind)) savedWhileDirty = true;
     }
 
+    /** The open document is encrypted: no snapshot or backup may be written while this holds. */
+    public boolean isEncrypted() {
+        return encrypted;
+    }
+
     /** @return true if recovery should be cleared now. */
     public boolean onState(HostState next) {
         HostState prev = state;
         state = next;
+        encrypted = next.encrypted;
+        if (next.encrypted) return true;
         if (next.dirty) savedWhileDirty = false;
         if (guardClear) {
             if (next.hasDocument && (!opening || openCompleted(next))) {

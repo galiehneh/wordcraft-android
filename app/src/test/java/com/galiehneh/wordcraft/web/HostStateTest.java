@@ -28,4 +28,10 @@ public class HostStateTest {
     public void nullNameBecomesEmpty() {
         assertEquals("", HostState.EMPTY.name);
     }
+
+    @Test
+    public void encryptedDefaultsToFalse() {
+        assertFalse(HostState.EMPTY.encrypted);
+        assertTrue(new HostState(true, true, false, false, false, "a", 0, true).encrypted);
+    }
 }

@@ -227,7 +227,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     @Override
     public void onSnapshot(String name, long rev, ByteBuffer docx) {
-        if (!state.dirty) return;
+        if (!state.dirty || policy.isEncrypted()) return;
         String docName = name.isEmpty() ? state.name : name;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
                 docName, saves.sourceUriFor(docName), rev);
@@ -265,7 +265,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     @Override
     public void backup(CurrentDoc doc, ByteBuffer bytes) {
-        recovery.backup(doc, bytes);
+        if (!policy.isEncrypted()) recovery.backup(doc, bytes);
     }
 
     @Override

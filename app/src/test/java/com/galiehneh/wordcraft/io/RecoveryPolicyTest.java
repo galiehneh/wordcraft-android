@@ -125,4 +125,23 @@ public class RecoveryPolicyTest {
         p.onState(st(true, true, "a.docx"));
         assertTrue(p.onState(st(false, true, "a.docx")));
     }
+
+    @Test
+    public void encryptedStateClearsRecoveryAndBlocksSnapshots() {
+        RecoveryPolicy p = new RecoveryPolicy();
+        p.onReady();
+        p.onState(st(false, true, "a.docx"));
+        assertFalse(p.isEncrypted());
+        assertTrue(p.onState(new HostState(true, true, false, false, false, "a.docx", 1, true)));
+        assertTrue(p.isEncrypted());
+    }
+
+    @Test
+    public void encryptedClearsEvenWhileGuardedAndLiftsWhenPlain() {
+        RecoveryPolicy p = new RecoveryPolicy();
+        p.onReady();
+        assertTrue(p.onState(new HostState(true, true, false, false, false, "a.docx", 1, true)));
+        assertFalse(p.onState(st(true, true, "b.docx")));
+        assertFalse(p.isEncrypted());
+    }
 }

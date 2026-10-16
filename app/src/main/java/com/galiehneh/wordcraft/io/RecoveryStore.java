@@ -2,36 +2,82 @@ package com.galiehneh.wordcraft.io;
 
 import android.util.AtomicFile;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 
-/** Crash-safe snapshot of the current document. Skeleton: not wired into MainActivity yet. */
+/** Crash-safe snapshot of the current document: {@code current.docx} + {@code meta.json}. */
 public final class RecoveryStore {
-    private final AtomicFile file;
+    /** Metadata describing a stored snapshot. */
+    public static final class Meta {
+        public final String name;
+        public final String sourceUri;
+        public final long rev;
 
-    public RecoveryStore(File dir) {
-        this.file = new AtomicFile(new File(dir, "current.docx"));
+        public Meta(String name, String sourceUri, long rev) {
+            this.name = name;
+            this.sourceUri = sourceUri;
+            this.rev = rev;
+        }
     }
 
-    public void write(byte[] docx) throws IOException {
+    private final AtomicFile docFile;
+    private final AtomicFile metaFile;
+
+    public RecoveryStore(File dir) {
+        if (!dir.isDirectory() && !dir.mkdirs()) {
+            // write() will surface the failure as IOException.
+        }
+        this.docFile = new AtomicFile(new File(dir, "current.docx"));
+        this.metaFile = new AtomicFile(new File(dir, "meta.json"));
+    }
+
+    public File docFile() {
+        return docFile.getBaseFile();
+    }
+
+    public synchronized void write(Meta meta, byte[] docx) throws IOException {
+        writeAtomic(docFile, docx);
+        try {
+            JSONObject json = new JSONObject()
+                    .put("name", meta.name)
+                    .put("sourceUri", meta.sourceUri)
+                    .put("rev", meta.rev);
+            writeAtomic(metaFile, json.toString().getBytes(StandardCharsets.UTF_8));
+        } catch (JSONException e) {
+            throw new IOException(e);
+        }
+    }
+
+    /** @return the stored metadata, or null if there is no complete snapshot. */
+    public synchronized Meta readMeta() {
+        if (!docFile.getBaseFile().isFile() || !metaFile.getBaseFile().isFile()) return null;
+        try {
+            JSONObject json = new JSONObject(new String(metaFile.readFully(), StandardCharsets.UTF_8));
+            return new Meta(json.optString("name", FileNames.DEFAULT_NAME),
+                    json.optString("sourceUri", ""), json.optLong("rev", 0));
+        } catch (IOException | JSONException e) {
+            return null;
+        }
+    }
+
+    public synchronized void clear() {
+        docFile.delete();
+        metaFile.delete();
+    }
+
+    private static void writeAtomic(AtomicFile file, byte[] bytes) throws IOException {
         FileOutputStream out = file.startWrite();
         try {
-            out.write(docx);
+            out.write(bytes);
             file.finishWrite(out);
         } catch (IOException e) {
             file.failWrite(out);
             throw e;
         }
-    }
-
-    /** @return snapshot bytes, or null if none exists. */
-    public byte[] read() throws IOException {
-        if (!file.getBaseFile().exists()) return null;
-        return file.readFully();
-    }
-
-    public void clear() {
-        file.delete();
     }
 }

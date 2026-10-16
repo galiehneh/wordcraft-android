@@ -38,10 +38,12 @@ public final class WebViewHost {
     private final Callbacks callbacks;
     private final FileChooser fileChooser;
     private final WebViewAssetLoader loader;
+    private final WordCraftSync sync;
 
     public WebViewHost(android.content.Context context, DocTokenStore tokens, Callbacks callbacks, FileChooser fileChooser) {
         this.callbacks = callbacks;
         this.fileChooser = fileChooser;
+        this.sync = new WordCraftSync(context);
         this.loader = new WebViewAssetLoader.Builder()
                 .setDomain(NavPolicy.APP_HOST)
                 .addPathHandler(DOC_URL_PREFIX, new HostPathHandlers.Docs(tokens))
@@ -81,6 +83,7 @@ public final class WebViewHost {
         if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
             return false;
         }
+        webView.addJavascriptInterface(sync, WordCraftSync.JS_OBJECT_NAME);
         WebViewCompat.addWebMessageListener(webView, JS_OBJECT_NAME, Collections.singleton(ORIGIN), bridge);
         return true;
     }
@@ -95,6 +98,12 @@ public final class WebViewHost {
             if (NavPolicy.isLocalScheme(uri.getScheme())) return null;
             WebResourceResponse response = loader.shouldInterceptRequest(uri);
             return response != null ? response : HostPathHandlers.notFound();
+        }
+
+        @Override
+        public void onPageStarted(WebView view, String url, android.graphics.Bitmap favicon) {
+            Uri uri = url == null ? Uri.EMPTY : Uri.parse(url);
+            sync.setTrusted(uri.getScheme(), uri.getHost());
         }
 
         @Override

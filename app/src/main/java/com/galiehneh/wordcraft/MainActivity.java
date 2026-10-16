@@ -60,7 +60,17 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
 
         controller = new HostController(this, this);
         fileChooser = new FileChooser(this);
-        pickers = new DocumentPickers(this, controller::onPicked);
+        pickers = new DocumentPickers(this, new DocumentPickers.Listener() {
+            @Override
+            public void onOpenPicked(Uri uri) {
+                controller.onPicked(uri);
+            }
+
+            @Override
+            public void onCreateResult(Uri uri) {
+                controller.onCreateResult(uri);
+            }
+        });
         webViewHost = new WebViewHost(this, controller.tokens(), this, fileChooser);
         fab.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
@@ -232,6 +242,11 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         } catch (ActivityNotFoundException e) {
             toast(R.string.no_app_for_link);
         }
+    }
+
+    @Override
+    public void createDocument(String suggestedName, String mime) {
+        pickers.create(suggestedName, mime);
     }
 
     @Override

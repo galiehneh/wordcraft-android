@@ -8,8 +8,6 @@ import android.util.Log;
 
 import com.galiehneh.wordcraft.io.CurrentDoc;
 import com.galiehneh.wordcraft.io.DocumentRepository;
-import com.galiehneh.wordcraft.io.FileNames;
-import com.galiehneh.wordcraft.io.MimeMap;
 import com.galiehneh.wordcraft.io.RecoveryPolicy;
 import com.galiehneh.wordcraft.io.RecoveryStore;
 import com.galiehneh.wordcraft.web.DocSource;
@@ -26,9 +24,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /** Host-side logic behind the bridge: pending opens, recovery snapshots, confirmed saves, Back. */
-final class HostController implements HostBridge.Listener {
+final class HostController implements HostBridge.Listener, SaveCoordinator.Host {
     private static final String TAG = "WordCraft";
-    private static final long BACK_TIMEOUT_MS = 4000;
     private static final long OPEN_TIMEOUT_MS = 15_000;
 
     /** Effects on the activity, always invoked on the UI thread. */
@@ -43,6 +40,9 @@ final class HostController implements HostBridge.Listener {
         void openExternal(Uri uri);
 
         void pickOpen();
+
+        /** Shows the SAF "create document" picker; the answer comes back via onCreateResult. */
+        void createDocument(String suggestedName, String mime);
     }
 
     private final Callbacks callbacks;
@@ -51,26 +51,27 @@ final class HostController implements HostBridge.Listener {
     private final DocTokenStore tokens = new DocTokenStore();
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
-    private final Runnable backTimeout = this::onBackTimeout;
     private final Runnable openTimeout = this::onOpenTimeout;
     private final RecoveryPolicy policy = new RecoveryPolicy();
+    private final SaveCoordinator saves;
+    private final BackGate back;
 
     private HostBridge bridge;
     private HostState state = HostState.EMPTY;
     private boolean ready;
     private boolean destroyed;
     private boolean launchOpenExpected;
-    private boolean backPending;
     private PendingOpen pending;
     private String currentSource = "";
     private String openingSource = "";
-    private CurrentDoc current;
     private CurrentDoc openingDoc;
 
     HostController(Context context, Callbacks callbacks) {
         this.callbacks = callbacks;
         this.documents = new DocumentRepository(context);
         this.recovery = new RecoveryStore(new java.io.File(context.getFilesDir(), "recovery"));
+        this.saves = new SaveCoordinator(documents, this);
+        this.back = new BackGate(main, () -> callbacks.exit(state.dirty));
     }
 
     DocTokenStore tokens() {
@@ -79,9 +80,9 @@ final class HostController implements HostBridge.Listener {
 
     /** Binds a fresh bridge (new WebView): the page must send {@code ready} again. */
     HostBridge newBridge() {
-        main.removeCallbacks(backTimeout);
         main.removeCallbacks(openTimeout);
-        backPending = false;
+        back.reset();
+        saves.dropPending();
         ready = false;
         state = HostState.EMPTY;
         if (bridge != null) bridge.detach();
@@ -102,12 +103,9 @@ final class HostController implements HostBridge.Listener {
     void openUri(Uri uri, boolean persist) {
         runIo(() -> {
             try {
-                String name = documents.displayName(uri);
-                documents.probe(uri);
-                if (persist) documents.persistAccess(uri);
-                CurrentDoc doc = new CurrentDoc(uri.toString(), name, documents.canWrite(uri));
+                CurrentDoc doc = documents.describeForOpen(uri, persist);
                 DocSource source = () -> documents.openStream(uri);
-                main.post(() -> queueOpen(new PendingOpen(source, name, uri.toString(), false, doc)));
+                main.post(() -> queueOpen(new PendingOpen(source, doc.name, doc.uri, false, doc)));
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
@@ -120,12 +118,14 @@ final class HostController implements HostBridge.Listener {
         });
     }
 
-    private void runIo(Runnable task) {
+    @Override
+    public void runIo(Runnable task) {
         if (!destroyed) io.execute(task);
     }
 
     /** Runs on the UI thread only while the activity lives and {@code target} is still the bound bridge. */
-    private void postIfCurrent(HostBridge target, Runnable task) {
+    @Override
+    public void postIfCurrent(HostBridge target, Runnable task) {
         main.post(() -> {
             if (!destroyed && target == bridge) task.run();
         });
@@ -155,7 +155,7 @@ final class HostController implements HostBridge.Listener {
     private void onOpenTimeout() {
         policy.onOpenTimeout();
         currentSource = openingSource;
-        current = openingDoc;
+        saves.setCurrent(openingDoc);
         flushOpen();
     }
 
@@ -168,20 +168,13 @@ final class HostController implements HostBridge.Listener {
                 return;
             }
             DocSource source = () -> new FileInputStream(recovery.docFile());
-            CurrentDoc doc = restoredDoc(meta);
+            CurrentDoc doc = documents.restoredTarget(meta.sourceUri, meta.name);
             main.post(() -> {
                 if (!destroyed && policy.acceptRestore(pending != null)) {
                     queueOpen(new PendingOpen(source, meta.name, meta.sourceUri, true, doc));
                 }
             });
         });
-    }
-
-    /** The original file is a save target again only while its write grant survived. */
-    private CurrentDoc restoredDoc(RecoveryStore.Meta meta) {
-        if (meta.sourceUri.isEmpty()) return null;
-        Uri uri = Uri.parse(meta.sourceUri);
-        return documents.canWrite(uri) ? new CurrentDoc(meta.sourceUri, meta.name, true) : null;
     }
 
     // Lifecycle -------------------------------------------------------------------------------
@@ -202,25 +195,12 @@ final class HostController implements HostBridge.Listener {
     // Back ------------------------------------------------------------------------------------
 
     void requestBack() {
-        if (!ready || backPending) return;
-        backPending = true;
-        main.postDelayed(backTimeout, BACK_TIMEOUT_MS);
-        bridge.sendBack();
-    }
-
-    /** No reply at all within the timeout: the page is unresponsive, leave the app. */
-    private void onBackTimeout() {
-        if (!backPending) return;
-        backPending = false;
-        callbacks.exit(state.dirty);
+        if (ready && back.begin()) bridge.sendBack();
     }
 
     @Override
     public void onBackResult(boolean handled) {
-        if (!backPending) return;
-        backPending = false;
-        main.removeCallbacks(backTimeout);
-        if (!handled) callbacks.exit(state.dirty);
+        back.onResult(handled);
     }
 
     // Bridge listener ---------------------------------------------------------------------------
@@ -244,10 +224,10 @@ final class HostController implements HostBridge.Listener {
         if (wasOpening && !policy.isOpening()) {
             main.removeCallbacks(openTimeout);
             currentSource = openingSource;
-            current = openingDoc;
+            saves.setCurrent(openingDoc);
             flushOpen();
         }
-        if (!s.hasDocument && !policy.isOpening()) current = null;
+        if (!s.hasDocument && !policy.isOpening()) saves.setCurrent(null);
         callbacks.onStateChanged(s);
     }
 
@@ -256,43 +236,39 @@ final class HostController implements HostBridge.Listener {
         if (!state.dirty) return;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
                 name.isEmpty() ? state.name : name, currentSource, rev);
-        runIo(() -> {
-            try {
-                recovery.write(meta, docx);
-            } catch (IOException | OutOfMemoryError e) {
-                Log.e(TAG, "Recovery snapshot failed", e);
-            }
-        });
+        runIo(() -> recovery.writeQuietly(meta, docx));
     }
 
     @Override
     public void onSave(long ticket, String kind, String name, String mime, ByteBuffer bytes) {
-        String fileName = FileNames.sanitize(name);
-        String type = mime.isEmpty() ? MimeMap.of(fileName) : mime;
-        HostBridge target = bridge;
-        runIo(() -> {
-            try {
-                documents.saveToDownloads(fileName, type, bytes);
-                postIfCurrent(target, () -> {
-                    policy.onSaveOk(kind);
-                    target.sendSaveResult(ticket, "ok", fileName);
-                    callbacks.toast(R.string.saved_to_downloads, fileName);
-                });
-            } catch (IOException | OutOfMemoryError e) {
-                Log.e(TAG, "Save failed", e);
-                postIfCurrent(target, () -> {
-                    target.sendSaveResult(ticket, "failed", String.valueOf(e.getMessage()));
-                    callbacks.toast(R.string.save_failed);
-                });
-            }
-        });
+        saves.onSave(bridge, ticket, kind, name, mime, bytes);
+    }
+
+    void onCreateResult(Uri uri) {
+        saves.onCreateResult(uri);
+    }
+
+    // SaveCoordinator.Host --------------------------------------------------------------------
+
+    @Override
+    public void toast(int resId, Object... args) {
+        callbacks.toast(resId, args);
+    }
+
+    @Override
+    public void createDocument(String suggestedName, String mime) {
+        callbacks.createDocument(suggestedName, mime);
+    }
+
+    @Override
+    public void saved(String kind, CurrentDoc retargeted) {
+        policy.onSaveOk(kind);
+        if (retargeted != null) currentSource = retargeted.uri;
     }
 
     @Override
     public void onSaveRejected(long ticket, String reason) {
-        if (destroyed || bridge == null) return;
-        bridge.sendSaveResult(ticket, "failed", reason);
-        callbacks.toast(R.string.save_failed);
+        if (!destroyed) saves.reject(bridge, ticket, reason);
     }
 
     @Override

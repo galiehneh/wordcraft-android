@@ -1,6 +1,7 @@
 package com.galiehneh.wordcraft.io;
 
 import android.util.AtomicFile;
+import android.util.Log;
 
 import com.galiehneh.wordcraft.web.HostProtocol;
 
@@ -53,6 +54,15 @@ public final class RecoveryStore {
             writeAtomic(metaFile, ByteBuffer.wrap(json.toString().getBytes(StandardCharsets.UTF_8)));
         } catch (JSONException e) {
             throw new IOException(e);
+        }
+    }
+
+    /** Snapshot write that logs instead of throwing (low memory, full disk): recovery is best effort. */
+    public void writeQuietly(Meta meta, ByteBuffer docx) {
+        try {
+            write(meta, docx);
+        } catch (IOException | OutOfMemoryError e) {
+            Log.e("WordCraft", "Recovery snapshot failed", e);
         }
     }
 

@@ -1,28 +1,22 @@
 package com.galiehneh.wordcraft.io;
 
 import android.content.ContentResolver;
-import android.content.ContentValues;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
-import android.os.Build;
-import android.os.Environment;
 import android.os.Process;
-import android.provider.MediaStore;
 import android.provider.OpenableColumns;
 
 import com.galiehneh.wordcraft.web.HostProtocol;
 
-import java.io.File;
-import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 
-/** Document IO: display names, probing readable URIs, saving to Downloads. Call off the main thread. */
+/** Document IO: display names, probing readable URIs, writing back. Call off the main thread. */
 public final class DocumentRepository {
     private final Context context;
 
@@ -84,29 +78,25 @@ public final class DocumentRepository {
                 Intent.FLAG_GRANT_WRITE_URI_PERMISSION) == PackageManager.PERMISSION_GRANTED;
     }
 
-    /** Legacy behaviour kept until W4: always a new file in Downloads. */
-    public void saveToDownloads(String filename, String mime, ByteBuffer bytes) throws IOException {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-            ContentResolver resolver = context.getContentResolver();
-            ContentValues values = new ContentValues();
-            values.put(MediaStore.MediaColumns.DISPLAY_NAME, filename);
-            values.put(MediaStore.MediaColumns.MIME_TYPE, mime);
-            values.put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS);
-            Uri uri = resolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values);
-            if (uri == null) throw new IOException("MediaStore insert failed");
-            try (OutputStream os = resolver.openOutputStream(uri)) {
-                if (os == null) throw new IOException("No output stream for " + uri);
-                HostProtocol.writeTo(os, bytes);
-            } catch (IOException e) {
-                resolver.delete(uri, null, null);
-                throw e;
-            }
-            return;
-        }
-        File dir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS);
-        if (!dir.isDirectory() && !dir.mkdirs()) throw new IOException("Cannot create " + dir);
-        try (FileOutputStream fos = new FileOutputStream(new File(dir, filename))) {
-            HostProtocol.writeTo(fos, bytes);
+    /** Probes {@code uri} and describes it as a save target; optionally keeps its grant. */
+    public CurrentDoc describeForOpen(Uri uri, boolean persist) throws IOException {
+        String name = displayName(uri);
+        probe(uri);
+        if (persist) persistAccess(uri);
+        return new CurrentDoc(uri.toString(), name, canWrite(uri));
+    }
+
+    /** The original file is a save target again only while its write grant survived. */
+    public CurrentDoc restoredTarget(String sourceUri, String name) {
+        if (sourceUri.isEmpty() || !canWrite(Uri.parse(sourceUri))) return null;
+        return new CurrentDoc(sourceUri, name, true);
+    }
+
+    /** Replaces the content of {@code uri} ("wt" truncates first). Call off the main thread. */
+    public void write(Uri uri, ByteBuffer bytes) throws IOException {
+        try (OutputStream os = context.getContentResolver().openOutputStream(uri, "wt")) {
+            if (os == null) throw new IOException("No output stream for " + uri);
+            HostProtocol.writeTo(os, bytes.duplicate());
         }
     }
 }

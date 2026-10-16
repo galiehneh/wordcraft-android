@@ -67,6 +67,8 @@ public class MainActivity extends Activity {
     private ValueCallback<Uri[]> filePathCallback;
     private String currentDocumentName = null;
     private TextView fab;
+    private long backPressedTime = 0;
+    private Toast exitToast = null;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -484,18 +486,29 @@ public class MainActivity extends Activity {
             this.currentDocumentName = null;
             if (webView != null) {
                 webView.loadUrl(BASE_URL);
+                webView.clearHistory();
             }
+            backPressedTime = 0;
             Toast.makeText(this, "Kembali ke Beranda", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (webView != null && webView.canGoBack()) {
-            webView.goBack();
-            if (fab != null) {
-                fab.setVisibility(View.VISIBLE);
+
+        // Di Beranda: user harus tekan 2x dalam 2 detik untuk keluar
+        long currentTime = System.currentTimeMillis();
+        if (currentTime - backPressedTime < 2000) {
+            if (exitToast != null) {
+                exitToast.cancel();
             }
-            return;
+            super.onBackPressed();
+        } else {
+            backPressedTime = currentTime;
+            if (exitToast != null) {
+                exitToast.cancel();
+            }
+            exitToast = Toast.makeText(this, "Tekan sekali lagi untuk keluar", Toast.LENGTH_SHORT);
+            exitToast.show();
+            getWindow().getDecorView().performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY);
         }
-        super.onBackPressed();
     }
 
     @Override

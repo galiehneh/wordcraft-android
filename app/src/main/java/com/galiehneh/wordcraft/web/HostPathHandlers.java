@@ -63,7 +63,7 @@ final class HostPathHandlers {
                 InputStream in = source.open();
                 return new WebResourceResponse("application/octet-stream", null, 200, "OK",
                         Collections.singletonMap("Cache-Control", "no-store"), in);
-            } catch (IOException | SecurityException e) {
+            } catch (IOException | RuntimeException e) {
                 return notFound();
             }
         }

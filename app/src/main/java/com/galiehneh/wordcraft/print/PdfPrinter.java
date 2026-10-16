@@ -11,6 +11,8 @@ import android.print.PrintDocumentInfo;
 import android.print.PrintManager;
 import android.util.Log;
 
+import com.galiehneh.wordcraft.io.FileNames;
+
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -31,7 +33,8 @@ public final class PdfPrinter {
     }
 
     /** @return false when there is nothing to print or the print service is unavailable. */
-    public boolean print(String jobName, ByteBuffer pdf) {
+    public boolean print(String documentName, ByteBuffer pdf) {
+        String jobName = FileNames.pdfName(documentName);
         PrintManager manager = (PrintManager) context.getSystemService(Context.PRINT_SERVICE);
         if (manager == null || !pdf.hasRemaining()) return false;
         // No copy here (main thread): the adapter streams from a view of the editor's own buffer.

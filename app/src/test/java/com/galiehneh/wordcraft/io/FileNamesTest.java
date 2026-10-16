@@ -43,4 +43,22 @@ public class FileNamesTest {
         assertTrue(out.length() <= 120);
         assertTrue(out.endsWith(".docx"));
     }
+
+    @Test
+    public void pdfNameAppendsExtension() {
+        assertEquals("Laporan 2026.pdf", FileNames.pdfName("Laporan 2026"));
+    }
+
+    @Test
+    public void pdfNameDoesNotDoubleExtension() {
+        assertEquals("a.pdf", FileNames.pdfName("a.PDF"));
+    }
+
+    @Test
+    public void pdfNameSanitisesAndFallsBack() {
+        assertEquals("a_b.pdf", FileNames.pdfName("a/b"));
+        assertEquals("document.pdf", FileNames.pdfName(""));
+        assertEquals("document.pdf", FileNames.pdfName(null));
+        assertEquals("document.pdf", FileNames.pdfName("///"));
+    }
 }

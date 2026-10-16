@@ -3,6 +3,7 @@ package com.galiehneh.wordcraft.io;
 /** File name sanitising for names supplied by the editor. Pure. */
 public final class FileNames {
     public static final String DEFAULT_NAME = "document.docx";
+    private static final String DEFAULT_BASE = "document";
     private static final int MAX_LENGTH = 120;
 
     private FileNames() {}
@@ -27,5 +28,14 @@ public final class FileNames {
             s = s.substring(0, MAX_LENGTH - ext.length()) + ext;
         }
         return s;
+    }
+
+    /** Print job / file name for editor-supplied {@code name} (no Word extension): {@code <name>.pdf}. */
+    public static String pdfName(String name) {
+        String base = name == null ? "" : name.trim();
+        if (base.toLowerCase(java.util.Locale.ROOT).endsWith(".pdf")) base = base.substring(0, base.length() - 4);
+        String clean = base.isEmpty() ? DEFAULT_BASE : sanitize(base);
+        if (DEFAULT_NAME.equals(clean)) clean = DEFAULT_BASE;
+        return clean + ".pdf";
     }
 }

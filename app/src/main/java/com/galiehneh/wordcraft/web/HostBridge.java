@@ -2,6 +2,7 @@ package com.galiehneh.wordcraft.web;
 
 import android.net.Uri;
 import android.util.Base64;
+import android.annotation.SuppressLint;
 import android.util.Log;
 import android.webkit.WebView;
 
@@ -171,6 +172,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
     }
 
     /** Posts {@code {"type":type, k1:v1, ...}} to the page; dropped (logged) before the first message. */
+    @SuppressLint("RequiresFeature") // proxy is only set by a WEB_MESSAGE_LISTENER callback
     private void send(String type, Object... keyValues) {
         if (detached) return;
         if (proxy == null) {

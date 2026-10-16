@@ -15,5 +15,9 @@ captures
 signing/*.keystore
 signing/*.p12
 signing/release-signing.properties
+signing/*.properties
+*.jks
+*.keystore
+*.p12
 !signing/release-signing.properties.example
 AGENTS.md

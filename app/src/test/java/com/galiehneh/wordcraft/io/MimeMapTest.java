@@ -33,4 +33,14 @@ public class MimeMapTest {
         assertTrue(Arrays.asList(MimeMap.OPEN_TYPES).contains("application/octet-stream"));
         assertFalse(Arrays.asList(MimeMap.OPEN_TYPES).contains("application/pdf"));
     }
+
+    @Test
+    public void saveMimeIsAllowlistedElseFromExtension() {
+        assertEquals("application/pdf", MimeMap.forSave("Application/PDF", "a.docx"));
+        assertEquals("text/plain", MimeMap.forSave("text/plain", "a.txt"));
+        assertEquals("application/msword", MimeMap.forSave("text/javascript", "a.doc"));
+        assertEquals("application/octet-stream", MimeMap.forSave("application/x-evil", "a.xyz"));
+        assertEquals("text/markdown", MimeMap.forSave("", "a.md"));
+        assertEquals("text/markdown", MimeMap.forSave(null, "a.md"));
+    }
 }

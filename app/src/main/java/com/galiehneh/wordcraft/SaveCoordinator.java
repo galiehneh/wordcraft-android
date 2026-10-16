@@ -104,7 +104,7 @@ final class SaveCoordinator {
     private void pick(HostBridge target, long ticket, String kind, String fileName, String mime,
                       ByteBuffer bytes) {
         pending = new Pending(target, ticket, kind, bytes);
-        host.createDocument(fileName, mime.isEmpty() ? MimeMap.of(fileName) : mime);
+        host.createDocument(fileName, MimeMap.forSave(mime, fileName));
     }
 
     /** Result of the CreateDocument picker; {@code uri == null} means the user cancelled. */

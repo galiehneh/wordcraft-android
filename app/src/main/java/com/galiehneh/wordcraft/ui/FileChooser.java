@@ -7,7 +7,6 @@ import android.net.Uri;
 import android.util.Log;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
-import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.result.ActivityResultLauncher;
@@ -15,7 +14,7 @@ import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.galiehneh.wordcraft.R;
 
-/** SAF document picker: WebView file chooser requests and the direct "open document" button. */
+/** WebView file chooser requests ({@code <input type=file>}) served through SAF. */
 public final class FileChooser {
     private static final String TAG = "WordCraft";
 
@@ -32,36 +31,16 @@ public final class FileChooser {
             "application/octet-stream"
     };
 
-    /** Callbacks to the host activity. */
-    public interface Listener {
-        /** The WebView chooser returned a selection. */
-        void onChooserSelected();
-
-        /** The direct picker returned a document. */
-        void onDocumentPicked(Uri uri);
-    }
-
     private final ComponentActivity activity;
-    private final Listener listener;
     private final ActivityResultLauncher<Intent> chooserLauncher;
-    private final ActivityResultLauncher<Intent> directLauncher;
     private ValueCallback<Uri[]> filePathCallback;
 
     /** Must be constructed before the activity reaches STARTED (e.g. in onCreate). */
-    public FileChooser(ComponentActivity activity, Listener listener) {
+    public FileChooser(ComponentActivity activity) {
         this.activity = activity;
-        this.listener = listener;
         this.chooserLauncher = activity.registerForActivityResult(
                 new ActivityResultContracts.StartActivityForResult(),
                 result -> onChooserResult(result.getResultCode(), result.getData()));
-        this.directLauncher = activity.registerForActivityResult(
-                new ActivityResultContracts.StartActivityForResult(),
-                result -> {
-                    Intent data = result.getData();
-                    if (result.getResultCode() == Activity.RESULT_OK && data != null && data.getData() != null) {
-                        listener.onDocumentPicked(data.getData());
-                    }
-                });
     }
 
     public boolean onShowFileChooser(ValueCallback<Uri[]> callback, WebChromeClient.FileChooserParams params) {
@@ -100,23 +79,10 @@ public final class FileChooser {
         }
     }
 
-    public void openDirect() {
-        try {
-            directLauncher.launch(openIntent(Intent.ACTION_OPEN_DOCUMENT));
-        } catch (ActivityNotFoundException e) {
-            try {
-                directLauncher.launch(Intent.createChooser(openIntent(Intent.ACTION_GET_CONTENT), activity.getString(R.string.choose_document)));
-            } catch (Exception ex) {
-                Toast.makeText(activity, R.string.no_file_picker, Toast.LENGTH_SHORT).show();
-            }
-        }
-    }
-
     private void onChooserResult(int resultCode, Intent data) {
         if (filePathCallback == null) return;
         Uri[] results = null;
         if (resultCode == Activity.RESULT_OK && data != null) {
-            listener.onChooserSelected();
             if (data.getData() != null) {
                 results = new Uri[]{data.getData()};
             } else if (data.getClipData() != null) {

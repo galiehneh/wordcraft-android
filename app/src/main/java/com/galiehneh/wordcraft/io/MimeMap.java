@@ -4,6 +4,19 @@ import java.util.Locale;
 
 /** Maps file names or paths to MIME types by extension. */
 public final class MimeMap {
+    /** Types offered by the document picker (octet-stream catches providers with generic types). */
+    public static final String[] OPEN_TYPES = {
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/msword",
+            "application/vnd.oasis.opendocument.text",
+            "application/rtf",
+            "text/rtf",
+            "text/plain",
+            "text/markdown",
+            "text/html",
+            "application/octet-stream"
+    };
+
     private MimeMap() {}
 
     public static String of(String path) {

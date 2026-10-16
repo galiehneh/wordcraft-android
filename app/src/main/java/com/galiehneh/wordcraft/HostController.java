@@ -6,6 +6,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.Log;
 
+import com.galiehneh.wordcraft.io.CurrentDoc;
 import com.galiehneh.wordcraft.io.DocumentRepository;
 import com.galiehneh.wordcraft.io.FileNames;
 import com.galiehneh.wordcraft.io.MimeMap;
@@ -63,6 +64,8 @@ final class HostController implements HostBridge.Listener {
     private PendingOpen pending;
     private String currentSource = "";
     private String openingSource = "";
+    private CurrentDoc current;
+    private CurrentDoc openingDoc;
 
     HostController(Context context, Callbacks callbacks) {
         this.callbacks = callbacks;
@@ -91,13 +94,20 @@ final class HostController implements HostBridge.Listener {
         launchOpenExpected = true;
     }
 
-    void openUri(Uri uri) {
+    /** Opens a document chosen in the SAF picker: keeps its grant across restarts. */
+    void onPicked(Uri uri) {
+        openUri(uri, true);
+    }
+
+    void openUri(Uri uri, boolean persist) {
         runIo(() -> {
             try {
                 String name = documents.displayName(uri);
                 documents.probe(uri);
+                if (persist) documents.persistAccess(uri);
+                CurrentDoc doc = new CurrentDoc(uri.toString(), name, documents.canWrite(uri));
                 DocSource source = () -> documents.openStream(uri);
-                main.post(() -> queueOpen(new PendingOpen(source, name, uri.toString(), false)));
+                main.post(() -> queueOpen(new PendingOpen(source, name, uri.toString(), false, doc)));
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
@@ -135,6 +145,7 @@ final class HostController implements HostBridge.Listener {
         // A dirty document is about to be replaced: persist it first (the editor also prompts).
         if (state.dirty) bridge.sendSnapshotNow();
         openingSource = p.sourceUri;
+        openingDoc = p.doc;
         policy.onOpenSent();
         main.removeCallbacks(openTimeout);
         main.postDelayed(openTimeout, OPEN_TIMEOUT_MS);
@@ -144,6 +155,7 @@ final class HostController implements HostBridge.Listener {
     private void onOpenTimeout() {
         policy.onOpenTimeout();
         currentSource = openingSource;
+        current = openingDoc;
         flushOpen();
     }
 
@@ -156,12 +168,20 @@ final class HostController implements HostBridge.Listener {
                 return;
             }
             DocSource source = () -> new FileInputStream(recovery.docFile());
+            CurrentDoc doc = restoredDoc(meta);
             main.post(() -> {
                 if (!destroyed && policy.acceptRestore(pending != null)) {
-                    queueOpen(new PendingOpen(source, meta.name, meta.sourceUri, true));
+                    queueOpen(new PendingOpen(source, meta.name, meta.sourceUri, true, doc));
                 }
             });
         });
+    }
+
+    /** The original file is a save target again only while its write grant survived. */
+    private CurrentDoc restoredDoc(RecoveryStore.Meta meta) {
+        if (meta.sourceUri.isEmpty()) return null;
+        Uri uri = Uri.parse(meta.sourceUri);
+        return documents.canWrite(uri) ? new CurrentDoc(meta.sourceUri, meta.name, true) : null;
     }
 
     // Lifecycle -------------------------------------------------------------------------------
@@ -224,8 +244,10 @@ final class HostController implements HostBridge.Listener {
         if (wasOpening && !policy.isOpening()) {
             main.removeCallbacks(openTimeout);
             currentSource = openingSource;
+            current = openingDoc;
             flushOpen();
         }
+        if (!s.hasDocument && !policy.isOpening()) current = null;
         callbacks.onStateChanged(s);
     }
 

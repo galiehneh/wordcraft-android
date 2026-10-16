@@ -23,6 +23,7 @@ import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 
+import com.galiehneh.wordcraft.ui.DocumentPickers;
 import com.galiehneh.wordcraft.ui.FileChooser;
 import com.galiehneh.wordcraft.ui.InsetsController;
 import com.galiehneh.wordcraft.web.CrashLimiter;
@@ -40,6 +41,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     private HostController controller;
     private WebViewHost webViewHost;
     private FileChooser fileChooser;
+    private DocumentPickers pickers;
     private OnBackPressedCallback backCallback;
     private final CrashLimiter crashLimiter = new CrashLimiter(MAX_CRASHES, CRASH_WINDOW_MS);
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -57,21 +59,12 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         setContentView(root);
 
         controller = new HostController(this, this);
-        fileChooser = new FileChooser(this, new FileChooser.Listener() {
-            @Override
-            public void onChooserSelected() {
-                // No-op: FAB visibility follows editor state only.
-            }
-
-            @Override
-            public void onDocumentPicked(Uri uri) {
-                controller.openUri(uri);
-            }
-        });
+        fileChooser = new FileChooser(this);
+        pickers = new DocumentPickers(this, controller::onPicked);
         webViewHost = new WebViewHost(this, controller.tokens(), this, fileChooser);
         fab.setOnClickListener(v -> {
             v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-            fileChooser.openDirect();
+            pickers.open();
         });
 
         backCallback = new OnBackPressedCallback(false) {
@@ -192,7 +185,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
             return;
         }
         if (atLaunch) controller.expectLaunchOpen();
-        controller.openUri(uri);
+        controller.openUri(uri, false);
     }
 
     private boolean isPrivateFile(Uri uri) {
@@ -243,7 +236,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
 
     @Override
     public void pickOpen() {
-        fab.performClick();
+        pickers.open();
     }
 
     // FAB ---------------------------------------------------------------------------------------

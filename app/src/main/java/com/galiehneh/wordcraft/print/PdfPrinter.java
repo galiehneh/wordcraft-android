@@ -34,14 +34,12 @@ public final class PdfPrinter {
     public boolean print(String jobName, ByteBuffer pdf) {
         PrintManager manager = (PrintManager) context.getSystemService(Context.PRINT_SERVICE);
         if (manager == null || !pdf.hasRemaining()) return false;
-        byte[] bytes = new byte[pdf.remaining()];
-        pdf.duplicate().get(bytes);
+        // No copy here (main thread): the adapter streams from a view of the editor's own buffer.
         try {
-            manager.print(jobName, new PdfAdapter(jobName, bytes), new PrintAttributes.Builder().build());
+            manager.print(jobName, new PdfAdapter(jobName, pdf.duplicate()), new PrintAttributes.Builder().build());
             return true;
-        } catch (RuntimeException e) {
+        } catch (RuntimeException | OutOfMemoryError e) {
             Log.e(TAG, "Print failed", e);
-            Arrays.fill(bytes, (byte) 0);
             return false;
         }
     }
@@ -49,9 +47,9 @@ public final class PdfPrinter {
     private static final class PdfAdapter extends PrintDocumentAdapter {
         private final String name;
         private final ExecutorService worker = Executors.newSingleThreadExecutor();
-        private volatile byte[] bytes;
+        private volatile ByteBuffer bytes;
 
-        PdfAdapter(String name, byte[] bytes) {
+        PdfAdapter(String name, ByteBuffer bytes) {
             this.name = name;
             this.bytes = bytes;
         }
@@ -72,22 +70,26 @@ public final class PdfPrinter {
         @Override
         public void onWrite(PageRange[] pages, ParcelFileDescriptor destination,
                 CancellationSignal cancel, WriteResultCallback callback) {
-            byte[] data = bytes;
+            ByteBuffer data = bytes;
             if (data == null) {
                 callback.onWriteFailed(null);
                 return;
             }
             worker.execute(() -> {
                 try (FileOutputStream out = new FileOutputStream(destination.getFileDescriptor())) {
-                    for (int off = 0; off < data.length; off += CHUNK) {
+                    ByteBuffer src = data.duplicate();
+                    byte[] chunk = new byte[CHUNK];
+                    while (src.hasRemaining()) {
                         if (cancel.isCanceled()) {
                             callback.onWriteCancelled();
                             return;
                         }
-                        out.write(data, off, Math.min(CHUNK, data.length - off));
+                        int n = Math.min(CHUNK, src.remaining());
+                        src.get(chunk, 0, n);
+                        out.write(chunk, 0, n);
                     }
                     callback.onWriteFinished(new PageRange[]{PageRange.ALL_PAGES});
-                } catch (IOException e) {
+                } catch (IOException | RuntimeException | OutOfMemoryError e) {
                     Log.e(TAG, "Print write failed", e);
                     callback.onWriteFailed(e.getMessage());
                 }
@@ -97,9 +99,12 @@ public final class PdfPrinter {
         @Override
         public void onFinish() {
             worker.execute(() -> {
-                byte[] data = bytes;
+                ByteBuffer data = bytes;
                 bytes = null;
-                if (data != null) Arrays.fill(data, (byte) 0);
+                if (data != null && data.hasArray()) {
+                    Arrays.fill(data.array(), data.arrayOffset() + data.position(),
+                            data.arrayOffset() + data.limit(), (byte) 0);
+                }
             });
             worker.shutdown();
         }

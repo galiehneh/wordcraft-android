@@ -14,12 +14,12 @@ val signingProperties = Properties().apply {
 
 android {
     namespace = "com.galiehneh.wordcraft"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.galiehneh.wordcraft"
         minSdk = 24
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 20261020
         versionName = "2026.10.16.4"
     }

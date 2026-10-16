@@ -187,8 +187,22 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
             toast(R.string.open_failed);
             return;
         }
+        if (isPrivateFile(uri)) {
+            toast(R.string.open_failed);
+            return;
+        }
         if (atLaunch) controller.expectLaunchOpen();
         controller.openUri(uri);
+    }
+
+    private boolean isPrivateFile(Uri uri) {
+        if (!"file".equalsIgnoreCase(uri.getScheme()) || uri.getPath() == null) return false;
+        try {
+            return IntentRouter.isPrivateFile(uri.getScheme(),
+                    new java.io.File(uri.getPath()).getCanonicalPath(), getFilesDir().getCanonicalPath());
+        } catch (java.io.IOException e) {
+            return true;
+        }
     }
 
     // HostController.Callbacks ----------------------------------------------------------------

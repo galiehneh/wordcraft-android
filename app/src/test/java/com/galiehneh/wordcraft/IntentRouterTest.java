@@ -20,4 +20,14 @@ public class IntentRouterTest {
         assertFalse(IntentRouter.shouldHandleLaunch("android.intent.action.VIEW", true));
         assertFalse(IntentRouter.shouldHandleLaunch("android.intent.action.MAIN", false));
     }
+
+    @Test
+    public void fileUrisInsideAppDataAreRefused() {
+        String files = "/data/user/0/com.galiehneh.wordcraft/files";
+        assertTrue(IntentRouter.isPrivateFile("file", files + "/recovery/current.docx", files));
+        assertTrue(IntentRouter.isPrivateFile("file", "/data/user/0/com.galiehneh.wordcraft/shared_prefs/x.xml", files));
+        assertFalse(IntentRouter.isPrivateFile("file", "/storage/emulated/0/a.docx", files));
+        assertFalse(IntentRouter.isPrivateFile("file", "/data/user/0/com.galiehneh.wordcraft2/a", files));
+        assertFalse(IntentRouter.isPrivateFile("content", files + "/x", files));
+    }
 }

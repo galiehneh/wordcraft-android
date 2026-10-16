@@ -14,4 +14,11 @@ final class IntentRouter {
     static boolean shouldHandleLaunch(String action, boolean hasSavedState) {
         return !hasSavedState && isDocumentAction(action);
     }
+
+    /** A file:// URI must never expose the app's private storage (recovery snapshots, prefs). */
+    static boolean isPrivateFile(String scheme, String canonicalPath, String canonicalFilesDir) {
+        if (!"file".equalsIgnoreCase(scheme) || canonicalPath == null) return false;
+        String dataRoot = canonicalFilesDir.substring(0, Math.max(0, canonicalFilesDir.lastIndexOf('/')));
+        return canonicalPath.equals(dataRoot) || canonicalPath.startsWith(dataRoot + "/");
+    }
 }

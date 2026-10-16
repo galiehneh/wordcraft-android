@@ -33,22 +33,17 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     interface Callbacks {
         void onStateChanged(HostState state);
 
-        /** The editor page sent {@code ready}. */
         void onEditorReady();
-
         /** The editor does not consume Back: leave the app. */
         void exit(boolean dirty);
 
         void toast(int resId, Object... args);
 
         void openExternal(Uri uri);
-
         void pickOpen();
         void ime(boolean visible);
-
         /** Shows the SAF "create document" picker; the answer comes back via onCreateResult. */
         void createDocument(String suggestedName, String mime);
-
         void print(String name, ByteBuffer pdf);
     }
 
@@ -81,9 +76,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         this.back = new BackGate(main, () -> callbacks.exit(state.dirty));
     }
 
-    DocTokenStore tokens() {
-        return tokens;
-    }
+    DocTokenStore tokens() { return tokens; }
 
     /** Binds a fresh bridge (new WebView): the page must send {@code ready} again. */
     HostBridge newBridge() {
@@ -98,9 +91,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         return bridge;
     }
 
-    void expectLaunchOpen() {
-        launchOpenExpected = true;
-    }
+    void expectLaunchOpen() { launchOpenExpected = true; }
 
     /** Opens a document chosen in the SAF picker: keeps its grant across restarts. */
     void onPicked(Uri uri) {
@@ -248,9 +239,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         saves.onSave(bridge, ticket, kind, name, mime, bytes);
     }
 
-    void onCreateResult(Uri uri) {
-        saves.onCreateResult(uri);
-    }
+    void onCreateResult(Uri uri) { saves.onCreateResult(uri); }
 
     // SaveCoordinator.Host --------------------------------------------------------------------
 
@@ -260,9 +249,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     }
 
     @Override
-    public String text(int resId) {
-        return context.getString(resId);
-    }
+    public String text(int resId) { return context.getString(resId); }
 
     @Override
     public void createDocument(String suggestedName, String mime) {

@@ -7,8 +7,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-5394b162e46f96e2.js';
-const wasm = await init({ module_or_path: './wordcraft-web-5394b162e46f96e2_bg.wasm' });
+import init, * as bindings from './wordcraft-web-92d4dc6722a51943.js';
+const wasm = await init({ module_or_path: './wordcraft-web-92d4dc6722a51943_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -25,127 +25,147 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
   </style>
   <script>
     (function() {
-      // Helper to find the hidden input element created by eframe TextAgent
-      function getTextAgentInput() {
-        return document.querySelector('input[type="text"]') || document.querySelector('input');
+      // The text input eframe adds right after the canvas to receive typing and the soft keyboard.
+      function textAgentInput() {
+        var canvas = document.getElementById('wordcraft_canvas');
+        var el = canvas && canvas.nextElementSibling;
+        return el && el.tagName === 'INPUT' ? el : null;
       }
 
-      function notifyShowKeyboard() {
-        if (window.WordCraftAndroid && window.WordCraftAndroid.showKeyboard) {
-          window.WordCraftAndroid.showKeyboard();
-        }
-      }
-
-      function notifyHideKeyboard() {
-        if (window.WordCraftAndroid && window.WordCraftAndroid.hideKeyboard) {
-          window.WordCraftAndroid.hideKeyboard();
-        }
-      }
-
+      // Called from the Rust UI (js_sys::eval) when it enters or leaves edit mode.
       window.showSoftKeyboard = function() {
-        const input = getTextAgentInput();
-        if (input) {
-          try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
-        }
-        notifyShowKeyboard();
+        var input = textAgentInput();
+        if (!input) return;
+        try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
       };
-
       window.hideSoftKeyboard = function() {
-        const input = getTextAgentInput();
-        if (input) {
-          try { input.blur(); } catch (e) {}
-        }
-        notifyHideKeyboard();
+        var input = textAgentInput();
+        if (input) { try { input.blur(); } catch (e) {} }
       };
-
       window.setWordCraftEditMode = function(on) {
-        window.isWordCraftEditMode = on;
-        if (!on) {
-          window.hideSoftKeyboard();
-        }
+        if (!on) window.hideSoftKeyboard();
       };
+      window.setDocumentOpened = function() {};
 
-      window.setDocumentOpened = function(opened) {
-        if (window.WordCraftAndroid && window.WordCraftAndroid.setDocumentOpened) {
-          window.WordCraftAndroid.setDocumentOpened(opened);
-        }
+      document.addEventListener('contextmenu', function(e) { e.preventDefault(); }, false);
+
+      // Android host (docs/host-protocol.md). Absent in a normal browser: nothing below runs.
+      var host = window.WordCraftHost;
+      if (!host) return;
+
+      // JS -> native. The Rust side sends everything through these two functions.
+      var CHUNK_BYTES = 512 * 1024;
+      var arrayBufferOk = true;
+      var chunkSeq = 0;
+      var lastState = { name: 'document.docx', rev: 0 };
+      function post(obj) { window.wordcraftHostPost(JSON.stringify(obj)); }
+      window.wordcraftHostPost = function(json) {
+        try {
+          var obj = JSON.parse(json);
+          if (obj && obj.type === 'state') lastState = obj;
+        } catch (e) {}
+        host.postMessage(json);
       };
-
-      function hookAgentInput(input) {
-        if (!input || input.__agentHooked) return;
-        input.__agentHooked = true;
-        input.addEventListener('focus', function() {
-          notifyShowKeyboard();
-        });
-        input.addEventListener('blur', function() {
-          notifyHideKeyboard();
-        });
+      function base64(bytes) {
+        var bin = '';
+        for (var i = 0; i < bytes.length; i += 0x8000) {
+          bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+        }
+        return btoa(bin);
       }
+      // One ArrayBuffer [u32 LE header length][header JSON][bytes]; where the WebView takes no
+      // ArrayBuffer (postMessage throws), the same message as base64 chunks.
+      function postFrame(header, bytes) {
+        if (arrayBufferOk) {
+          var h = new TextEncoder().encode(JSON.stringify(header));
+          var out = new Uint8Array(4 + h.length + bytes.length);
+          new DataView(out.buffer).setUint32(0, h.length, true);
+          out.set(h, 4);
+          out.set(bytes, 4 + h.length);
+          try { host.postMessage(out.buffer); return; }
+          catch (e) { arrayBufferOk = false; console.warn('host takes no ArrayBuffer; sending base64 chunks', e); }
+        }
+        var id = ++chunkSeq;
+        var chunks = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
+        for (var i = 0; i < chunks; i++) {
+          host.postMessage(JSON.stringify({
+            type: 'chunk', id: id, index: i, chunks: chunks, header: header,
+            data: base64(bytes.subarray(i * CHUNK_BYTES, (i + 1) * CHUNK_BYTES))
+          }));
+        }
+      }
+      window.wordcraftHostPostFrame = function(headerJson, bytes) { postFrame(JSON.parse(headerJson), bytes); };
 
-      const agentObserver = new MutationObserver(function() {
-        const input = getTextAgentInput();
-        if (input) hookAgentInput(input);
-      });
-      agentObserver.observe(document.documentElement, { childList: true, subtree: true });
+      // ready: once Trunk has started the wasm module.
+      var readySent = false;
+      function sendReady() { if (!readySent) { readySent = true; post({ type: 'ready' }); } }
+      window.addEventListener('TrunkApplicationStarted', sendReady);
+      if (window.wasmBindings) sendReady();
 
-      // When canvas is tapped on mobile:
-      document.addEventListener('DOMContentLoaded', function() {
-        const canvas = document.getElementById('wordcraft_canvas');
-        if (canvas) {
-          canvas.setAttribute('tabindex', '0');
-          canvas.addEventListener('touchend', function(e) {
-            if (window.isWordCraftEditMode) {
-              const input = getTextAgentInput();
-              if (input) {
-                try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
-              }
-              notifyShowKeyboard();
+      // The soft keyboard follows the focus of eframe's text input.
+      var imeVisible = null;
+      function imeListener(visible) {
+        return function(e) {
+          if (e.target !== textAgentInput() || imeVisible === visible) return;
+          imeVisible = visible;
+          post({ type: 'ime', visible: visible });
+        };
+      }
+      document.addEventListener('focusin', imeListener(true), true);
+      document.addEventListener('focusout', imeListener(false), true);
+
+      // Links that open a window go to the system browser instead.
+      window.open = function(url) {
+        try { post({ type: 'openExternal', url: new URL(String(url || ''), location.href).href }); }
+        catch (e) { console.warn('window.open ignored:', url, e); }
+        return null;
+      };
+
+      // native -> JS: events arrive as JSON text. They wait until the wasm exports exist and the
+      // app is running (wordcraftHostUp, called from Rust), then run in order.
+      var queue = [];
+      var appUp = false;
+      function handle(msg) {
+        var api = window.wasmBindings;
+        try {
+          switch (msg.type) {
+            case 'open':
+              api.wordcraft_open_url(String(msg.url || ''), String(msg.name || ''), msg.recovered === true);
+              break;
+            case 'saveResult':
+              api.wordcraft_save_result(msg.ticket >>> 0, String(msg.outcome || 'failed'), String(msg.message || ''));
+              break;
+            case 'back':
+              post({ type: 'backResult', handled: !!api.wordcraft_back() });
+              break;
+            case 'snapshotNow': {
+              var bytes = api.wordcraft_snapshot_now();
+              if (bytes) postFrame({ type: 'snapshot', name: lastState.name, rev: lastState.rev }, bytes);
+              break;
             }
-          }, { passive: true });
+            default:
+              console.warn('unknown host event:', msg.type);
+          }
+        } catch (e) {
+          console.error('host event failed:', msg.type, e);
+          if (msg.type === 'back') post({ type: 'backResult', handled: false });
         }
-      });
-
-      const origClick = HTMLAnchorElement.prototype.click;
-      HTMLAnchorElement.prototype.click = function() {
-        if (this.href && this.href.startsWith("blob:") && window.WordCraftAndroid) {
-          const href = this.href;
-          const filename = this.download || "document.docx";
-          fetch(href)
-            .then(function(res) { return res.blob(); })
-            .then(function(blob) {
-              const reader = new FileReader();
-              reader.onloadend = function() {
-                if (window.WordCraftAndroid && window.WordCraftAndroid.saveBlob) {
-                  window.WordCraftAndroid.saveBlob(reader.result, filename);
-                }
-              };
-              reader.readAsDataURL(blob);
-            })
-            .catch(function(err) {
-              console.error("Blob download interception error:", err);
-            });
-        }
-        return origClick.apply(this, arguments);
+      }
+      function drain() {
+        while (appUp && window.wasmBindings && queue.length) handle(queue.shift());
+      }
+      window.wordcraftHostUp = function() { appUp = true; drain(); };
+      window.wordcraftHostEvent = function(raw) {
+        var msg;
+        try { msg = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { console.warn('bad host event:', e); return; }
+        if (!msg || typeof msg !== 'object') { console.warn('bad host event:', raw); return; }
+        queue.push(msg);
+        drain();
       };
-
-      window.handleAndroidBack = function() {
-        const ev = new KeyboardEvent('keydown', {
-          key: 'Escape',
-          code: 'Escape',
-          keyCode: 27,
-          which: 27,
-          bubbles: true
-        });
-        window.dispatchEvent(ev);
-        document.dispatchEvent(ev);
-      };
-
-      document.addEventListener('contextmenu', function(e) {
-        e.preventDefault();
-      }, false);
+      host.onmessage = function(ev) { window.wordcraftHostEvent(ev.data); };
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-5394b162e46f96e2.js" crossorigin="anonymous" integrity="sha384-8KdwyaTnrySnaXcfY6UGUkz48fXApGQSKFRMFg9g/kKQvWDcXBrsfREWdldYZXdW"><link rel="preload" href="./wordcraft-web-5394b162e46f96e2_bg.wasm" crossorigin="anonymous" integrity="sha384-nLZH2LU8biSUtodkoD0aillnfUUajwDfQHmliJM16M7d4EPIbpY6jICr1VLSPBff" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="./wordcraft-web-92d4dc6722a51943.js" crossorigin="anonymous" integrity="sha384-/t9ZKFv10WMBYHBIKKHRF2ypISdQnVNODfVwqMoqS440BwjS1vp5rVfns0j9Zxmd"><link rel="preload" href="./wordcraft-web-92d4dc6722a51943_bg.wasm" crossorigin="anonymous" integrity="sha384-cXDUVPlcTLy1Xpiehq2QxO3SQdc5mi/BzaR2+xUZuVKJxOX0mXAUJGvE+lmnNjJJ" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>

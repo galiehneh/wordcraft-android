@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+  <title>WordCraft</title>
+  <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
+  
+<script type="module">
+import init, * as bindings from './wordcraft-web-1695f96d81b758d.js';
+const wasm = await init({ module_or_path: './wordcraft-web-1695f96d81b758d_bg.wasm' });
+
+
+window.wasmBindings = bindings;
+
+
+dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
+
+</script>
+  <style>
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6; }
+    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
+  </style>
+  <script>
+    (function() {
+      const origClick = HTMLAnchorElement.prototype.click;
+      HTMLAnchorElement.prototype.click = function() {
+        if (this.href && this.href.startsWith("blob:") && window.WordCraftAndroid) {
+          const href = this.href;
+          const filename = this.download || "document.docx";
+          fetch(href)
+            .then(function(res) { return res.blob(); })
+            .then(function(blob) {
+              const reader = new FileReader();
+              reader.onloadend = function() {
+                if (window.WordCraftAndroid && window.WordCraftAndroid.saveBlob) {
+                  window.WordCraftAndroid.saveBlob(reader.result, filename);
+                }
+              };
+              reader.readAsDataURL(blob);
+            })
+            .catch(function(err) {
+              console.error("Blob download interception error:", err);
+            });
+        }
+        return origClick.apply(this, arguments);
+      };
+
+      window.handleAndroidBack = function() {
+        const ev = new KeyboardEvent('keydown', {
+          key: 'Escape',
+          code: 'Escape',
+          keyCode: 27,
+          which: 27,
+          bubbles: true
+        });
+        window.dispatchEvent(ev);
+        document.dispatchEvent(ev);
+      };
+
+      document.addEventListener('contextmenu', function(e) {
+        e.preventDefault();
+      }, false);
+    })();
+  </script>
+<link rel="modulepreload" href="./wordcraft-web-1695f96d81b758d.js" crossorigin="anonymous" integrity="sha384-nsj3rsFwuWU4SKYYyn+/LIqGZTGUQkpv2r+j3DhgGryTREKa/xCBgxI7PEUJJc2v"><link rel="preload" href="./wordcraft-web-1695f96d81b758d_bg.wasm" crossorigin="anonymous" integrity="sha384-qOprXKOeQOq3I6i+AhHehpLNFXG3AFo+WOOyc/QjQUmlQ0yHwlJY7NxH/C/TsOHx" as="fetch" type="application/wasm"></head>
+<body>
+  <canvas id="wordcraft_canvas"></canvas>
+  <div id="wordcraft_loading">Loading WordCraft&hellip;</div>
+</body>
+</html>

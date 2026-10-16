@@ -3,8 +3,6 @@ package com.galiehneh.wordcraft;
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
 import android.content.res.Configuration;
-import android.graphics.Color;
-import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -12,8 +10,6 @@ import android.os.Handler;
 import android.os.Looper;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.HapticFeedbackConstants;
-import android.view.View;
 import android.view.ViewGroup;
 import android.webkit.WebView;
 import android.widget.FrameLayout;
@@ -38,7 +34,6 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
 
     private FrameLayout root;
     private WebView webView;
-    private TextView fab;
     private HostController controller;
     private WebViewHost webViewHost;
     private FileChooser fileChooser;
@@ -56,8 +51,6 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         root.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
         InsetsController.apply(getWindow(), root);
-        fab = createFabButton();
-        root.addView(fab);
         setContentView(root);
 
         controller = new HostController(this, this);
@@ -75,10 +68,6 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
             }
         });
         webViewHost = new WebViewHost(this, controller.tokens(), this, fileChooser);
-        fab.setOnClickListener(v -> {
-            v.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY);
-            pickers.open();
-        });
 
         backCallback = new OnBackPressedCallback(false) {
             @Override
@@ -216,7 +205,6 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     @Override
     public void onStateChanged(HostState state) {
         backCallback.setEnabled(state.wantsBack());
-        fab.setVisibility(state.hasDocument ? View.GONE : View.VISIBLE);
     }
 
     @Override
@@ -260,35 +248,6 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     @Override
     public void pickOpen() {
         pickers.open();
-    }
-
-    // FAB ---------------------------------------------------------------------------------------
-
-    private TextView createFabButton() {
-        TextView button = new TextView(this);
-        button.setText(R.string.open_document);
-        button.setTextColor(Color.WHITE);
-        button.setTextSize(TypedValue.COMPLEX_UNIT_SP, 14);
-        button.setTypeface(null, android.graphics.Typeface.BOLD);
-        int padH = dpToPx(20);
-        int padV = dpToPx(14);
-        button.setPadding(padH, padV, padH, padV);
-
-        GradientDrawable bg = new GradientDrawable();
-        bg.setColor(0xFF185ABD);
-        bg.setCornerRadius(dpToPx(28));
-        button.setBackground(bg);
-        button.setElevation(dpToPx(8));
-
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        params.gravity = Gravity.BOTTOM | Gravity.END;
-        params.bottomMargin = dpToPx(24);
-        params.rightMargin = dpToPx(20);
-        button.setLayoutParams(params);
-        button.setClickable(true);
-        button.setFocusable(true);
-        return button;
     }
 
     private int dpToPx(int dp) {

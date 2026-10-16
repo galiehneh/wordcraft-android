@@ -23,6 +23,7 @@ import android.widget.Toast;
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
 
+import com.galiehneh.wordcraft.print.PdfPrinter;
 import com.galiehneh.wordcraft.ui.DocumentPickers;
 import com.galiehneh.wordcraft.ui.FileChooser;
 import com.galiehneh.wordcraft.ui.InsetsController;
@@ -42,6 +43,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     private WebViewHost webViewHost;
     private FileChooser fileChooser;
     private DocumentPickers pickers;
+    private PdfPrinter printer;
     private OnBackPressedCallback backCallback;
     private final CrashLimiter crashLimiter = new CrashLimiter(MAX_CRASHES, CRASH_WINDOW_MS);
     private final Handler handler = new Handler(Looper.getMainLooper());
@@ -59,6 +61,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         setContentView(root);
 
         controller = new HostController(this, this);
+        printer = new PdfPrinter(this);
         fileChooser = new FileChooser(this);
         pickers = new DocumentPickers(this, new DocumentPickers.Listener() {
             @Override
@@ -247,6 +250,11 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     @Override
     public void createDocument(String suggestedName, String mime) {
         pickers.create(suggestedName, mime);
+    }
+
+    @Override
+    public void print(String name, java.nio.ByteBuffer pdf) {
+        if (!printer.print(name, pdf)) toast(R.string.print_failed);
     }
 
     @Override

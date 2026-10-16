@@ -9,4 +9,5 @@
     <string name="open_document">Buka Dokumen</string>
     <string name="choose_document">Pilih Dokumen</string>
     <string name="no_file_picker">Tidak ada aplikasi pemilih berkas</string>
+    <string name="print_failed">Tidak dapat mencetak dokumen</string>
 </resources>

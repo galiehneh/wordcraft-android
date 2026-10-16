@@ -10,4 +10,5 @@
     <string name="open_document">Open document</string>
     <string name="choose_document">Choose document</string>
     <string name="no_file_picker">No file picker app available</string>
+    <string name="print_failed">Could not print the document</string>
 </resources>

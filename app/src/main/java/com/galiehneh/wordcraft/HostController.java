@@ -43,6 +43,8 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
         /** Shows the SAF "create document" picker; the answer comes back via onCreateResult. */
         void createDocument(String suggestedName, String mime);
+
+        void print(String name, ByteBuffer pdf);
     }
 
     private final Callbacks callbacks;
@@ -273,7 +275,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     @Override
     public void onPrint(String name, ByteBuffer pdf) {
-        Log.i(TAG, "print not implemented yet (" + pdf.remaining() + " bytes)");
+        if (!destroyed) callbacks.print(name, pdf);
     }
 
     @Override

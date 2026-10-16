@@ -9,6 +9,7 @@ import android.util.Log;
 import com.galiehneh.wordcraft.io.DocumentRepository;
 import com.galiehneh.wordcraft.io.FileNames;
 import com.galiehneh.wordcraft.io.MimeMap;
+import com.galiehneh.wordcraft.io.RecoveryPolicy;
 import com.galiehneh.wordcraft.io.RecoveryStore;
 import com.galiehneh.wordcraft.web.DocSource;
 import com.galiehneh.wordcraft.web.DocTokenStore;
@@ -26,6 +27,7 @@ import java.util.concurrent.Executors;
 final class HostController implements HostBridge.Listener {
     private static final String TAG = "WordCraft";
     private static final long BACK_TIMEOUT_MS = 1500;
+    private static final long OPEN_TIMEOUT_MS = 15_000;
 
     /** Effects on the activity, always invoked on the UI thread. */
     interface Callbacks {
@@ -62,16 +64,17 @@ final class HostController implements HostBridge.Listener {
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Runnable backTimeout = this::onBackTimeout;
+    private final Runnable openTimeout = this::onOpenTimeout;
+    private final RecoveryPolicy policy = new RecoveryPolicy();
 
     private HostBridge bridge;
     private HostState state = HostState.EMPTY;
     private boolean ready;
     private boolean launchOpenExpected;
-    private boolean guardClear;
-    private boolean recoveryMaybeStale = true;
     private boolean backPending;
     private Pending pending;
     private String currentSource = "";
+    private String openingSource = "";
 
     HostController(Context context, Callbacks callbacks) {
         this.callbacks = callbacks;
@@ -86,6 +89,7 @@ final class HostController implements HostBridge.Listener {
     /** Binds a fresh bridge (new WebView): the page must send {@code ready} again. */
     HostBridge newBridge() {
         main.removeCallbacks(backTimeout);
+        main.removeCallbacks(openTimeout);
         backPending = false;
         ready = false;
         state = HostState.EMPTY;
@@ -110,6 +114,7 @@ final class HostController implements HostBridge.Listener {
                 main.post(() -> {
                     launchOpenExpected = false;
                     callbacks.toast(R.string.open_failed);
+                    if (ready) restoreRecovery();
                 });
             }
         });
@@ -123,20 +128,34 @@ final class HostController implements HostBridge.Listener {
 
     private void flushOpen() {
         Pending p = pending;
-        if (p == null) return;
+        if (p == null || !policy.canSendOpen()) return;
         pending = null;
-        currentSource = p.sourceUri;
-        guardClear = true;
+        // A dirty document is about to be replaced: persist it first (the editor also prompts).
+        if (state.dirty) bridge.sendSnapshotNow();
+        openingSource = p.sourceUri;
+        policy.onOpenSent();
+        main.removeCallbacks(openTimeout);
+        main.postDelayed(openTimeout, OPEN_TIMEOUT_MS);
         bridge.sendOpen(WebViewHost.DOC_URL_PREFIX + tokens.issue(p.source), p.name, p.recovered);
     }
 
+    private void onOpenTimeout() {
+        policy.onOpenTimeout();
+        currentSource = openingSource;
+        flushOpen();
+    }
+
     private void restoreRecovery() {
+        if (!policy.tryBeginRestore(pending != null, launchOpenExpected)) return;
         io.execute(() -> {
             RecoveryStore.Meta meta = recovery.readMeta();
-            if (meta == null) return;
+            if (meta == null) {
+                main.post(policy::onRestoreMissing);
+                return;
+            }
             DocSource source = () -> new FileInputStream(recovery.docFile());
             main.post(() -> {
-                if (pending == null && !state.hasDocument) {
+                if (policy.acceptRestore(pending != null)) {
                     queueOpen(new Pending(source, meta.name, meta.sourceUri, true));
                 }
             });
@@ -182,20 +201,23 @@ final class HostController implements HostBridge.Listener {
     @Override
     public void onReady() {
         ready = true;
+        policy.onReady();
         if (pending != null) {
             flushOpen();
-        } else if (!launchOpenExpected) {
+        } else {
             restoreRecovery();
         }
     }
 
     @Override
     public void onState(HostState s) {
+        boolean wasOpening = policy.isOpening();
         state = s;
-        if (s.hasDocument) guardClear = false;
-        if (!s.dirty && !guardClear && recoveryMaybeStale) {
-            recoveryMaybeStale = false;
-            io.execute(recovery::clear);
+        if (policy.onState(s)) io.execute(recovery::clear);
+        if (wasOpening && !policy.isOpening()) {
+            main.removeCallbacks(openTimeout);
+            currentSource = openingSource;
+            flushOpen();
         }
         callbacks.onStateChanged(s);
     }
@@ -203,7 +225,6 @@ final class HostController implements HostBridge.Listener {
     @Override
     public void onSnapshot(String name, long rev, byte[] docx) {
         if (!state.dirty) return;
-        recoveryMaybeStale = true;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
                 name.isEmpty() ? state.name : name, currentSource, rev);
         io.execute(() -> {
@@ -224,6 +245,7 @@ final class HostController implements HostBridge.Listener {
             try {
                 documents.saveToDownloads(fileName, type, bytes);
                 main.post(() -> {
+                    policy.onSaveOk(kind);
                     target.sendSaveResult(ticket, "ok", fileName);
                     callbacks.toast(R.string.saved_to_downloads, fileName);
                 });

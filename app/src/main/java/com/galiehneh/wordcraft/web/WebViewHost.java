@@ -88,7 +88,13 @@ public final class WebViewHost {
     private final class AssetClient extends WebViewClient {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            return loader.shouldInterceptRequest(request.getUrl());
+            Uri uri = request.getUrl();
+            if (!NavPolicy.isRequestAllowed(uri.getScheme(), uri.getHost())) {
+                return HostPathHandlers.forbidden();
+            }
+            if (NavPolicy.isLocalScheme(uri.getScheme())) return null;
+            WebResourceResponse response = loader.shouldInterceptRequest(uri);
+            return response != null ? response : HostPathHandlers.notFound();
         }
 
         @Override

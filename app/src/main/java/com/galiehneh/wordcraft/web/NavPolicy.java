@@ -22,4 +22,16 @@ public final class NavPolicy {
     public static boolean canOpenExternally(String scheme, String host) {
         return classify(scheme, host) == Action.OPEN_EXTERNAL;
     }
+
+    /** Requests the WebView may resolve itself (never reach the network). */
+    public static boolean isLocalScheme(String scheme) {
+        if (scheme == null) return false;
+        String s = scheme.toLowerCase(Locale.US);
+        return s.equals("data") || s.equals("blob") || s.equals("about");
+    }
+
+    /** Subresource lockdown: only the app origin may be fetched; everything else is refused. */
+    public static boolean isRequestAllowed(String scheme, String host) {
+        return classify(scheme, host) == Action.ALLOW_IN_APP || isLocalScheme(scheme);
+    }
 }

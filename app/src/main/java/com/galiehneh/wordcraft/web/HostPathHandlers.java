@@ -21,6 +21,10 @@ final class HostPathHandlers {
         return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", null, null);
     }
 
+    static WebResourceResponse forbidden() {
+        return new WebResourceResponse("text/plain", "UTF-8", 403, "Forbidden", null, null);
+    }
+
     /** Serves the bundled editor from {@code assets/web/}. */
     static final class Assets implements WebViewAssetLoader.PathHandler {
         private final WebViewAssetLoader.AssetsPathHandler delegate;

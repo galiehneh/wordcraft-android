@@ -40,4 +40,15 @@ public class NavPolicyTest {
         assertFalse(NavPolicy.canOpenExternally("https", "appassets.androidplatform.net"));
         assertFalse(NavPolicy.canOpenExternally("content", "x"));
     }
+
+    @Test
+    public void onlyAppOriginAndLocalSchemesAreFetchable() {
+        assertTrue(NavPolicy.isRequestAllowed("https", NavPolicy.APP_HOST));
+        assertTrue(NavPolicy.isRequestAllowed("blob", null));
+        assertTrue(NavPolicy.isRequestAllowed("DATA", null));
+        assertFalse(NavPolicy.isRequestAllowed("https", "example.com"));
+        assertFalse(NavPolicy.isRequestAllowed("http", NavPolicy.APP_HOST));
+        assertFalse(NavPolicy.isRequestAllowed("file", null));
+        assertFalse(NavPolicy.isRequestAllowed(null, null));
+    }
 }

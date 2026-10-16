@@ -11,4 +11,9 @@
     <string name="no_file_picker">No file picker app available</string>
     <string name="print_failed">Could not print the document</string>
     <string name="unsupported_file">This file type is not supported</string>
+    <string name="save_err_unknown_kind">Unknown save type</string>
+    <string name="save_err_busy">Another save is waiting for a location</string>
+    <string name="save_err_invalid_document">Refusing to overwrite the file with an invalid document</string>
+    <string name="save_err_export_overwrites">An export cannot replace the open document</string>
+    <string name="save_err_rejected">The save request could not be processed</string>
 </resources>

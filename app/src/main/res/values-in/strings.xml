@@ -10,4 +10,9 @@
     <string name="no_file_picker">Tidak ada aplikasi pemilih berkas</string>
     <string name="print_failed">Tidak dapat mencetak dokumen</string>
     <string name="unsupported_file">Jenis berkas ini tidak didukung</string>
+    <string name="save_err_unknown_kind">Jenis simpan tidak dikenal</string>
+    <string name="save_err_busy">Penyimpanan lain sedang menunggu lokasi</string>
+    <string name="save_err_invalid_document">Menolak menimpa berkas dengan dokumen yang tidak valid</string>
+    <string name="save_err_export_overwrites">Ekspor tidak dapat menggantikan dokumen yang sedang dibuka</string>
+    <string name="save_err_rejected">Permintaan simpan tidak dapat diproses</string>
 </resources>

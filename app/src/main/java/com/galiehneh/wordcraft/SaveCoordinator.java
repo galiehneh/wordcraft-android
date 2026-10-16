@@ -24,6 +24,9 @@ final class SaveCoordinator {
 
         void toast(int resId, Object... args);
 
+        /** Localised text for a reason reported back to the editor. */
+        String text(int resId);
+
         void createDocument(String suggestedName, String mime);
 
         /** A save/saveAs/export was confirmed written. */
@@ -76,17 +79,17 @@ final class SaveCoordinator {
 
     void onSave(HostBridge target, long ticket, String kind, String name, String mime, ByteBuffer bytes) {
         if (!SavePlan.isKnownKind(kind)) {
-            fail(target, ticket, "unknown save kind");
+            fail(target, ticket, host.text(R.string.save_err_unknown_kind));
             return;
         }
         String fileName = FileNames.sanitize(name);
         if (pending != null) {
-            fail(target, ticket, "another save is waiting for a target");
+            fail(target, ticket, host.text(R.string.save_err_busy));
             return;
         }
         if (SavePlan.decide(kind, fileName, current) == SavePlan.Target.IN_PLACE) {
             if (!SavePlan.canWriteInPlace(bytes)) {
-                fail(target, ticket, "refusing to overwrite the file with an invalid document");
+                fail(target, ticket, host.text(R.string.save_err_invalid_document));
                 return;
             }
             writeInPlace(target, ticket, kind, fileName, mime, current, bytes);
@@ -111,7 +114,7 @@ final class SaveCoordinator {
             return;
         }
         if (SavePlan.exportOverwritesCurrent(p.kind, uri.toString(), current)) {
-            fail(p.target, p.ticket, "an export cannot replace the open document");
+            fail(p.target, p.ticket, host.text(R.string.save_err_export_overwrites));
             return;
         }
         boolean retarget = SavePlan.retargetsCurrent(p.kind);
@@ -161,7 +164,7 @@ final class SaveCoordinator {
                         CurrentDoc doc, ByteBuffer bytes) {
         if (current == doc) setCurrent(new CurrentDoc(doc.uri, doc.name, false));
         if (pending != null) {
-            fail(target, ticket, "another save is waiting for a target");
+            fail(target, ticket, host.text(R.string.save_err_busy));
             return;
         }
         pick(target, ticket, kind, fileName, mime, bytes);
@@ -180,7 +183,8 @@ final class SaveCoordinator {
 
     /** The bridge refused the message (malformed or oversized): still answer the ticket. */
     void reject(HostBridge target, long ticket, String reason) {
-        if (target != null) fail(target, ticket, reason);
+        Log.w(TAG, "Save message rejected: " + reason);
+        if (target != null) fail(target, ticket, host.text(R.string.save_err_rejected));
     }
 
     private void fail(HostBridge target, long ticket, String reason) {

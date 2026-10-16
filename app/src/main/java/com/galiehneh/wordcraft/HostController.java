@@ -52,6 +52,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         void print(String name, ByteBuffer pdf);
     }
 
+    private final Context context;
     private final Callbacks callbacks;
     private final DocumentRepository documents;
     private final RecoveryCoordinator recovery;
@@ -71,6 +72,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     private CurrentDoc openingDoc;
 
     HostController(Context context, Callbacks callbacks) {
+        this.context = context.getApplicationContext();
         this.callbacks = callbacks;
         this.documents = new DocumentRepository(context);
         this.recovery = new RecoveryCoordinator(
@@ -255,6 +257,11 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     @Override
     public void toast(int resId, Object... args) {
         callbacks.toast(resId, args);
+    }
+
+    @Override
+    public String text(int resId) {
+        return context.getString(resId);
     }
 
     @Override

@@ -20,8 +20,8 @@ android {
         applicationId = "com.galiehneh.wordcraft"
         minSdk = 24
         targetSdk = 36
-        versionCode = 20261020
-        versionName = "2026.10.16.4"
+        versionCode = 20261021
+        versionName = "2026.10.16.5"
     }
 
     signingConfigs {
@@ -32,7 +32,6 @@ android {
                 storePassword = signingProperties.getProperty("storePassword")
                 keyAlias = signingProperties.getProperty("keyAlias")
                 keyPassword = signingProperties.getProperty("keyPassword")
-                enableV1Signing = true
                 enableV2Signing = true
             }
         }
@@ -44,7 +43,8 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (signingPropertiesFile.isFile) {
                 signingConfig = signingConfigs.getByName("release")
             }

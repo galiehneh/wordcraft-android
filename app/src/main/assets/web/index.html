@@ -7,8 +7,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-5288ae5f2cadf37b.js';
-const wasm = await init({ module_or_path: './wordcraft-web-5288ae5f2cadf37b_bg.wasm' });
+import init, * as bindings from './wordcraft-web-c8337fb9c65c17e1.js';
+const wasm = await init({ module_or_path: './wordcraft-web-c8337fb9c65c17e1_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -171,7 +171,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       host.onmessage = function(ev) { window.wordcraftHostEvent(ev.data); };
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-5288ae5f2cadf37b.js" crossorigin="anonymous" integrity="sha384-EczJVcLv5IgnmMX+Wi1wvYfvXHe8AbEHoqeKGdaNfyeXMa2BUZTXuqkbNuih4u9s"><link rel="preload" href="./wordcraft-web-5288ae5f2cadf37b_bg.wasm" crossorigin="anonymous" integrity="sha384-TBtR6KUN/dS8sopwm5FK5hPhJjD3t+ng5tCI+aJ6jILvkOZL6saBqc73l4cb9xzO" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="./wordcraft-web-c8337fb9c65c17e1.js" crossorigin="anonymous" integrity="sha384-uv/B6eTMirsglQ82ClH2D0DuabHfviTboY9LFCrJtxKEg9b+EmDA4Dr5Gx/vm3bD"><link rel="preload" href="./wordcraft-web-c8337fb9c65c17e1_bg.wasm" crossorigin="anonymous" integrity="sha384-kEfd6Ue9eIFruQmiE9FlOLJgK0YC+Izdfxb9AFzrvUApnaqgisy0Uulahm1EhEDN" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>

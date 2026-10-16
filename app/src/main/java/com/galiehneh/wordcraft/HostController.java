@@ -12,6 +12,7 @@ import com.galiehneh.wordcraft.io.RecoveryPolicy;
 import com.galiehneh.wordcraft.io.SavePlan;
 import com.galiehneh.wordcraft.io.RecoveryStore;
 import com.galiehneh.wordcraft.io.UnsupportedFileException;
+import com.galiehneh.wordcraft.io.UriLog;
 import com.galiehneh.wordcraft.web.DocSource;
 import com.galiehneh.wordcraft.web.DocTokenStore;
 import com.galiehneh.wordcraft.web.HostBridge;
@@ -106,7 +107,8 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
                 DocSource source = () -> documents.openStream(uri);
                 main.post(() -> queueOpen(new PendingOpen(source, doc.name, false, doc)));
             } catch (IOException | RuntimeException e) {
-                Log.e(TAG, "Cannot open " + uri, e);
+                Log.e(TAG, "Cannot open " + UriLog.describe(uri.getScheme(), uri.getAuthority())
+                        + ": " + e.getClass().getSimpleName());
                 main.post(() -> {
                     if (destroyed) return;
                     launchOpenExpected = false;

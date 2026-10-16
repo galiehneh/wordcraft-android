@@ -15,4 +15,5 @@
     <string name="save_err_invalid_document">Menolak menimpa berkas dengan dokumen yang tidak valid</string>
     <string name="save_err_export_overwrites">Ekspor tidak dapat menggantikan dokumen yang sedang dibuka</string>
     <string name="save_err_rejected">Permintaan simpan tidak dapat diproses</string>
+    <string name="save_err_io">Berkas tidak dapat ditulis</string>
 </resources>

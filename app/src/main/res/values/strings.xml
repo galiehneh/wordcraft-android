@@ -16,4 +16,5 @@
     <string name="save_err_invalid_document">Refusing to overwrite the file with an invalid document</string>
     <string name="save_err_export_overwrites">An export cannot replace the open document</string>
     <string name="save_err_rejected">The save request could not be processed</string>
+    <string name="save_err_io">The file could not be written</string>
 </resources>

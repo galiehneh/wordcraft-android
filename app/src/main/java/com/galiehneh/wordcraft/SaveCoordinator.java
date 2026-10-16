@@ -157,7 +157,7 @@ final class SaveCoordinator {
                 host.postIfCurrent(target, () -> succeed(target, ticket, kind, doc.name));
             } catch (java.io.IOException | RuntimeException | OutOfMemoryError e) {
                 if (SavePlan.shouldRepick(e)) {
-                    Log.w(TAG, "In-place save not possible, asking for a target", e);
+                    Log.w(TAG, "In-place save not possible, asking for a target: " + e.getClass().getSimpleName());
                     host.postIfCurrent(target, () -> repick(target, ticket, kind, fileName, mime, doc, bytes));
                 } else {
                     failed(target, ticket, e);
@@ -189,8 +189,8 @@ final class SaveCoordinator {
     }
 
     private void failed(HostBridge target, long ticket, Throwable e) {
-        Log.e(TAG, "Save failed", e);
-        host.postIfCurrent(target, () -> fail(target, ticket, String.valueOf(e.getMessage())));
+        Log.e(TAG, "Save failed: " + e.getClass().getSimpleName());
+        host.postIfCurrent(target, () -> fail(target, ticket, host.text(R.string.save_err_io)));
     }
 
     /** The bridge refused the message (malformed or oversized): still answer the ticket. */

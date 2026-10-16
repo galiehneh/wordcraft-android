@@ -20,8 +20,8 @@ android {
         applicationId = "com.galiehneh.wordcraft"
         minSdk = 24
         targetSdk = 35
-        versionCode = 20261017
-        versionName = "2026.10.16.1"
+        versionCode = 20261018
+        versionName = "2026.10.16.2"
     }
 
     signingConfigs {

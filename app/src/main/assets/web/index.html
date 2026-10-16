@@ -7,8 +7,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-92d4dc6722a51943.js';
-const wasm = await init({ module_or_path: './wordcraft-web-92d4dc6722a51943_bg.wasm' });
+import init, * as bindings from './wordcraft-web-4443853571e6de22.js';
+const wasm = await init({ module_or_path: './wordcraft-web-4443853571e6de22_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -83,7 +83,13 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
           out.set(h, 4);
           out.set(bytes, 4 + h.length);
           try { host.postMessage(out.buffer); return; }
-          catch (e) { arrayBufferOk = false; console.warn('host takes no ArrayBuffer; sending base64 chunks', e); }
+          catch (e) {
+            // Only "this WebView takes no ArrayBuffer" turns chunking on for good; any other
+            // failure is this message's, and the next one tries the ArrayBuffer again.
+            if (!(e instanceof TypeError || (e && e.name === 'DataCloneError'))) throw e;
+            arrayBufferOk = false;
+            console.warn('host takes no ArrayBuffer; sending base64 chunks', e);
+          }
         }
         var id = ++chunkSeq;
         var chunks = Math.max(1, Math.ceil(bytes.length / CHUNK_BYTES));
@@ -124,6 +130,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       // native -> JS: events arrive as JSON text. They wait until the wasm exports exist and the
       // app is running (wordcraftHostUp, called from Rust), then run in order.
       var queue = [];
+      var MAX_QUEUE = 256;
       var appUp = false;
       function handle(msg) {
         var api = window.wasmBindings;
@@ -159,13 +166,17 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
         var msg;
         try { msg = typeof raw === 'string' ? JSON.parse(raw) : raw; } catch (e) { console.warn('bad host event:', e); return; }
         if (!msg || typeof msg !== 'object') { console.warn('bad host event:', raw); return; }
+        if (queue.length >= MAX_QUEUE) {
+          var dropped = queue.shift();
+          console.warn('host event queue full (' + MAX_QUEUE + '); dropped the oldest:', dropped && dropped.type);
+        }
         queue.push(msg);
         drain();
       };
       host.onmessage = function(ev) { window.wordcraftHostEvent(ev.data); };
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-92d4dc6722a51943.js" crossorigin="anonymous" integrity="sha384-/t9ZKFv10WMBYHBIKKHRF2ypISdQnVNODfVwqMoqS440BwjS1vp5rVfns0j9Zxmd"><link rel="preload" href="./wordcraft-web-92d4dc6722a51943_bg.wasm" crossorigin="anonymous" integrity="sha384-cXDUVPlcTLy1Xpiehq2QxO3SQdc5mi/BzaR2+xUZuVKJxOX0mXAUJGvE+lmnNjJJ" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="./wordcraft-web-4443853571e6de22.js" crossorigin="anonymous" integrity="sha384-OLtoqhBMeMqB/vhVBMq2X9hu+QQHep0bImh8BPenw2ztWKPGuKudYC5GvO8aLSOS"><link rel="preload" href="./wordcraft-web-4443853571e6de22_bg.wasm" crossorigin="anonymous" integrity="sha384-xdXp87x9bAnoZlDovKANxGgMg+LqlUn3/jUmakXACPOIJ6xff7FDqKiWxkn3EboN" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>

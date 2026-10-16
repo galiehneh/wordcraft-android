@@ -107,7 +107,7 @@ final class SaveCoordinator {
         pending = null;
         if (p == null) return;
         if (uri == null) {
-            host.postIfCurrent(p.target, () -> p.target.sendSaveResult(p.ticket, "cancelled", ""));
+            host.postIfCurrent(p.target, () -> p.target.sendSaveResult(p.ticket, "cancelled", "", null));
             return;
         }
         if (SavePlan.exportOverwritesCurrent(p.kind, uri.toString(), current)) {
@@ -169,7 +169,7 @@ final class SaveCoordinator {
 
     private void succeed(HostBridge target, long ticket, String kind, String name) {
         host.saved(kind);
-        target.sendSaveResult(ticket, "ok", name);
+        target.sendSaveResult(ticket, "ok", "", name);
         host.toast(R.string.saved_file, name);
     }
 
@@ -184,7 +184,7 @@ final class SaveCoordinator {
     }
 
     private void fail(HostBridge target, long ticket, String reason) {
-        target.sendSaveResult(ticket, "failed", reason);
+        target.sendSaveResult(ticket, "failed", reason, null);
         host.toast(R.string.save_failed);
     }
 }

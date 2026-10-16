@@ -153,8 +153,13 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
         send("open", "url", url, "name", name, "recovered", recovered);
     }
 
-    public void sendSaveResult(long ticket, String outcome, String message) {
-        send("saveResult", "ticket", ticket, "outcome", outcome, "message", message);
+    /** @param name display name of the file actually written ({@code null} or empty: omitted) */
+    public void sendSaveResult(long ticket, String outcome, String message, String name) {
+        if (name == null || name.isEmpty()) {
+            send("saveResult", "ticket", ticket, "outcome", outcome, "message", message);
+        } else {
+            send("saveResult", "ticket", ticket, "outcome", outcome, "message", message, "name", name);
+        }
     }
 
     public void sendBack() {

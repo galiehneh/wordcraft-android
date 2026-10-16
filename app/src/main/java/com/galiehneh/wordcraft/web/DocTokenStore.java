@@ -8,11 +8,39 @@ import java.util.Map;
 public final class DocTokenStore {
     private static final int TOKEN_BYTES = 16;
     private static final int MAX_PENDING = 8;
+    /** A token the page has not fetched within this time is dead. */
+    public static final long TTL_MS = 60_000;
+
+    /** Monotonic milliseconds; injected so expiry is testable. */
+    public interface Clock {
+        long nowMs();
+    }
+
+    private static final class Entry {
+        final DocSource source;
+        final long expiresAt;
+
+        Entry(DocSource source, long expiresAt) {
+            this.source = source;
+            this.expiresAt = expiresAt;
+        }
+    }
 
     private final SecureRandom random = new SecureRandom();
-    private final Map<String, DocSource> sources = new LinkedHashMap<>();
+    private final Map<String, Entry> sources = new LinkedHashMap<>();
+    private final Clock clock;
+
+    public DocTokenStore() {
+        this(() -> System.nanoTime() / 1_000_000);
+    }
+
+    public DocTokenStore(Clock clock) {
+        this.clock = clock;
+    }
 
     public synchronized String issue(DocSource source) {
+        long now = clock.nowMs();
+        sources.values().removeIf(e -> e.expiresAt <= now);
         if (sources.size() >= MAX_PENDING) {
             // LinkedHashMap iterates in insertion order: drop the oldest (never fetched) token.
             sources.remove(sources.keySet().iterator().next());
@@ -24,12 +52,13 @@ public final class DocTokenStore {
             sb.append(Character.forDigit((b >> 4) & 0xF, 16)).append(Character.forDigit(b & 0xF, 16));
         }
         String token = sb.toString();
-        sources.put(token, source);
+        sources.put(token, new Entry(source, now + TTL_MS));
         return token;
     }
 
-    /** @return the source, removing the token; null if unknown or already used. */
+    /** @return the source, removing the token; null if unknown, already used or expired. */
     public synchronized DocSource consume(String token) {
-        return token == null ? null : sources.remove(token);
+        Entry e = token == null ? null : sources.remove(token);
+        return e == null || e.expiresAt <= clock.nowMs() ? null : e.source;
     }
 }

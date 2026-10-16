@@ -45,4 +45,17 @@ public class DocTokenStoreTest {
         for (int i = 0; i < 20; i++) last = store.issue(SRC);
         assertNotNull(store.consume(last));
     }
+
+    @Test
+    public void tokenExpiresAfterTtl() {
+        long[] now = {1_000};
+        DocTokenStore store = new DocTokenStore(() -> now[0]);
+        String fresh = store.issue(SRC);
+        String stale = store.issue(SRC);
+
+        now[0] += DocTokenStore.TTL_MS - 1;
+        assertSame(SRC, store.consume(fresh));
+        now[0] += 1;
+        assertNull(store.consume(stale));
+    }
 }

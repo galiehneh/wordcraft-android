@@ -41,6 +41,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         void openExternal(Uri uri);
 
         void pickOpen();
+        void ime(boolean visible);
 
         /** Shows the SAF "create document" picker; the answer comes back via onCreateResult. */
         void createDocument(String suggestedName, String mime);
@@ -61,8 +62,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     private HostBridge bridge;
     private HostState state = HostState.EMPTY;
-    private boolean ready;
-    private boolean destroyed;
+    private boolean ready, destroyed;
     private boolean launchOpenExpected;
     private PendingOpen pending;
     private String currentSource = "";
@@ -283,7 +283,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     @Override
     public void onIme(boolean visible) {
-        // Handled in a later wave (P3.1).
+        if (!destroyed) callbacks.ime(visible);
     }
 
     @Override

@@ -18,6 +18,9 @@ import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.view.WindowCompat;
+import androidx.core.view.WindowInsetsCompat;
+import androidx.core.view.WindowInsetsControllerCompat;
 
 import com.galiehneh.wordcraft.print.PdfPrinter;
 import com.galiehneh.wordcraft.ui.DocumentPickers;
@@ -248,6 +251,18 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     @Override
     public void pickOpen() {
         pickers.open();
+    }
+
+    @Override
+    public void ime(boolean visible) {
+        if (webView == null) return;
+        webView.requestFocus();
+        WindowInsetsControllerCompat insets = WindowCompat.getInsetsController(getWindow(), webView);
+        if (visible) {
+            insets.show(WindowInsetsCompat.Type.ime());
+        } else {
+            insets.hide(WindowInsetsCompat.Type.ime());
+        }
     }
 
     private int dpToPx(int dp) {

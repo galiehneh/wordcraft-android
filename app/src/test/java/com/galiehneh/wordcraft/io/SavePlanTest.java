@@ -96,4 +96,10 @@ public class SavePlanTest {
         assertFalse(SavePlan.shouldRepick(new IOException("disk full")));
         assertFalse(SavePlan.shouldRepick(new IllegalStateException()));
     }
+
+    @Test
+    public void failedBackupCancelsInPlaceWrite() {
+        assertEquals(SavePlan.Target.IN_PLACE, SavePlan.afterBackup(true));
+        assertEquals(SavePlan.Target.PICK_NEW, SavePlan.afterBackup(false));
+    }
 }

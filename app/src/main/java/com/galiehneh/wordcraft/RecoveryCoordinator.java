@@ -47,9 +47,9 @@ final class RecoveryCoordinator {
         execute(store::clear);
     }
 
-    /** Synchronous (caller is on an IO thread): the bytes about to overwrite a file in place. */
-    void backup(CurrentDoc doc, ByteBuffer docx) {
-        store.writeQuietly(new RecoveryStore.Meta(doc.name, doc.uri, 0), docx);
+    /** Synchronous (caller is on an IO thread): the bytes about to overwrite a file in place. @return stored? */
+    boolean backup(CurrentDoc doc, ByteBuffer docx) {
+        return store.tryWrite(new RecoveryStore.Meta(doc.name, doc.uri, 0), docx);
     }
 
     void read(Executor documentIo, DocumentRepository documents, RestoreSink sink) {

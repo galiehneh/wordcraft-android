@@ -264,8 +264,8 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     }
 
     @Override
-    public void backup(CurrentDoc doc, ByteBuffer bytes) {
-        if (!policy.isEncrypted()) recovery.backup(doc, bytes);
+    public boolean backup(CurrentDoc doc, ByteBuffer bytes) {
+        return policy.isEncrypted() || recovery.backup(doc, bytes);
     }
 
     @Override

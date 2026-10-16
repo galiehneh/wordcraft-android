@@ -59,10 +59,17 @@ public final class RecoveryStore {
 
     /** Snapshot write that logs instead of throwing (low memory, full disk): recovery is best effort. */
     public void writeQuietly(Meta meta, ByteBuffer docx) {
+        tryWrite(meta, docx);
+    }
+
+    /** @return false if the snapshot could not be stored (logged without the document location). */
+    public boolean tryWrite(Meta meta, ByteBuffer docx) {
         try {
             write(meta, docx);
+            return true;
         } catch (IOException | OutOfMemoryError e) {
-            Log.e("WordCraft", "Recovery snapshot failed", e);
+            Log.e("WordCraft", "Recovery write failed: " + e.getClass().getSimpleName());
+            return false;
         }
     }
 

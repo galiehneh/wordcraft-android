@@ -32,8 +32,11 @@ final class SaveCoordinator {
         /** A save/saveAs/export was confirmed written. */
         void saved(String kind);
 
-        /** IO thread, before an in-place overwrite: keep the new bytes recoverable if the write dies midway. */
-        void backup(CurrentDoc doc, ByteBuffer bytes);
+        /**
+         * IO thread, before an in-place overwrite: keep the new bytes recoverable if the write dies midway.
+         * @return false if the backup failed (the overwrite must then not happen)
+         */
+        boolean backup(CurrentDoc doc, ByteBuffer bytes);
     }
 
     private static final class Pending {
@@ -145,7 +148,11 @@ final class SaveCoordinator {
         Uri uri = Uri.parse(doc.uri);
         host.runIo(() -> {
             try {
-                host.backup(doc, bytes);
+                if (SavePlan.afterBackup(host.backup(doc, bytes)) != SavePlan.Target.IN_PLACE) {
+                    Log.w(TAG, "Recovery backup failed, not overwriting in place");
+                    host.postIfCurrent(target, () -> pickIfFree(target, ticket, kind, fileName, mime, bytes));
+                    return;
+                }
                 documents.write(uri, bytes);
                 host.postIfCurrent(target, () -> succeed(target, ticket, kind, doc.name));
             } catch (java.io.IOException | RuntimeException | OutOfMemoryError e) {
@@ -163,6 +170,11 @@ final class SaveCoordinator {
     private void repick(HostBridge target, long ticket, String kind, String fileName, String mime,
                         CurrentDoc doc, ByteBuffer bytes) {
         if (current == doc) setCurrent(new CurrentDoc(doc.uri, doc.name, false));
+        pickIfFree(target, ticket, kind, fileName, mime, bytes);
+    }
+
+    private void pickIfFree(HostBridge target, long ticket, String kind, String fileName, String mime,
+                            ByteBuffer bytes) {
         if (pending != null) {
             fail(target, ticket, host.text(R.string.save_err_busy));
             return;

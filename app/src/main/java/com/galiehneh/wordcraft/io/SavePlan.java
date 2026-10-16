@@ -47,6 +47,11 @@ public final class SavePlan {
         return FileSniffer.hasZipMagic(bytes);
     }
 
+    /** The recovery backup must be stored before the user's file is overwritten; otherwise ask for a new target. */
+    public static Target afterBackup(boolean backupStored) {
+        return backupStored ? Target.IN_PLACE : Target.PICK_NEW;
+    }
+
     /** Failures that mean "this file cannot be written back here": ask for a new target instead. */
     public static boolean shouldRepick(Throwable e) {
         return e instanceof SecurityException || e instanceof FileNotFoundException

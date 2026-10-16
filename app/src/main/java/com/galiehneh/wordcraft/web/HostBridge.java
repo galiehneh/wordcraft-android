@@ -118,7 +118,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
                         h.optString("name", ""), h.optLong("rev", 0)));
                 break;
             case "save":
-                listener.onSave(h.getLong("ticket"), h.optString("kind", "save"), h.optString("name", ""),
+                listener.onSave(h.getLong("ticket"), h.optString("kind", ""), h.optString("name", ""),
                         h.optString("mime", ""), bytes);
                 break;
             case "snapshot":

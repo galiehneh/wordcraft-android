@@ -9,6 +9,7 @@ import android.util.Log;
 import com.galiehneh.wordcraft.io.CurrentDoc;
 import com.galiehneh.wordcraft.io.DocumentRepository;
 import com.galiehneh.wordcraft.io.RecoveryPolicy;
+import com.galiehneh.wordcraft.io.SavePlan;
 import com.galiehneh.wordcraft.io.RecoveryStore;
 import com.galiehneh.wordcraft.io.UnsupportedFileException;
 import com.galiehneh.wordcraft.web.DocSource;
@@ -18,7 +19,6 @@ import com.galiehneh.wordcraft.web.HostState;
 import com.galiehneh.wordcraft.web.NavPolicy;
 import com.galiehneh.wordcraft.web.WebViewHost;
 
-import java.io.FileInputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.concurrent.ExecutorService;
@@ -51,8 +51,9 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     private final Callbacks callbacks;
     private final DocumentRepository documents;
-    private final RecoveryStore recovery;
+    private final RecoveryCoordinator recovery;
     private final DocTokenStore tokens = new DocTokenStore();
+    /** Save, open and probe work; recovery snapshots have their own thread. */
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final Runnable openTimeout = this::onOpenTimeout;
@@ -62,17 +63,15 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     private HostBridge bridge;
     private HostState state = HostState.EMPTY;
-    private boolean ready, destroyed;
-    private boolean launchOpenExpected;
+    private boolean ready, destroyed, launchOpenExpected;
     private PendingOpen pending;
-    private String currentSource = "";
-    private String openingSource = "";
     private CurrentDoc openingDoc;
 
     HostController(Context context, Callbacks callbacks) {
         this.callbacks = callbacks;
         this.documents = new DocumentRepository(context);
-        this.recovery = new RecoveryStore(new java.io.File(context.getFilesDir(), "recovery"));
+        this.recovery = new RecoveryCoordinator(
+                new RecoveryStore(new java.io.File(context.getFilesDir(), "recovery")));
         this.saves = new SaveCoordinator(documents, this);
         this.back = new BackGate(main, () -> callbacks.exit(state.dirty));
     }
@@ -109,8 +108,8 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
             try {
                 CurrentDoc doc = documents.describeForOpen(uri, persist, sniff);
                 DocSource source = () -> documents.openStream(uri);
-                main.post(() -> queueOpen(new PendingOpen(source, doc.name, doc.uri, false, doc)));
-            } catch (IOException | SecurityException e) {
+                main.post(() -> queueOpen(new PendingOpen(source, doc.name, false, doc)));
+            } catch (IOException | RuntimeException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
                     if (destroyed) return;
@@ -149,7 +148,6 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         pending = null;
         // A dirty document is about to be replaced: persist it first (the editor also prompts).
         if (state.dirty) bridge.sendSnapshotNow();
-        openingSource = p.sourceUri;
         openingDoc = p.doc;
         policy.onOpenSent();
         main.removeCallbacks(openTimeout);
@@ -157,29 +155,22 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
         bridge.sendOpen(WebViewHost.DOC_URL_PREFIX + tokens.issue(p.source), p.name, p.recovered);
     }
 
+    /** The editor never confirmed the open: it may not show that file, so it is not a save target. */
     private void onOpenTimeout() {
         policy.onOpenTimeout();
-        currentSource = openingSource;
-        saves.setCurrent(openingDoc);
+        saves.setCurrent(null);
         flushOpen();
     }
 
     private void restoreRecovery() {
         if (!policy.tryBeginRestore(pending != null, launchOpenExpected)) return;
-        runIo(() -> {
-            RecoveryStore.Meta meta = recovery.readMeta();
-            if (meta == null) {
-                main.post(policy::onRestoreMissing);
-                return;
+        recovery.read(this::runIo, documents, restore -> main.post(() -> {
+            if (restore == null) {
+                policy.onRestoreMissing();
+            } else if (!destroyed && policy.acceptRestore(pending != null)) {
+                queueOpen(new PendingOpen(restore.source, restore.meta.name, true, restore.target));
             }
-            DocSource source = () -> new FileInputStream(recovery.docFile());
-            CurrentDoc doc = documents.restoredTarget(meta.sourceUri, meta.name);
-            main.post(() -> {
-                if (!destroyed && policy.acceptRestore(pending != null)) {
-                    queueOpen(new PendingOpen(source, meta.name, meta.sourceUri, true, doc));
-                }
-            });
-        });
+        }));
     }
 
     // Lifecycle -------------------------------------------------------------------------------
@@ -191,6 +182,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
 
     void shutdown() {
         destroyed = true;
+        recovery.shutdown();
         if (bridge != null) bridge.detach();
         bridge = null;
         main.removeCallbacksAndMessages(null);
@@ -225,23 +217,24 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     public void onState(HostState s) {
         boolean wasOpening = policy.isOpening();
         state = s;
-        if (policy.onState(s)) runIo(recovery::clear);
+        if (policy.onState(s)) recovery.clear();
         if (wasOpening && !policy.isOpening()) {
             main.removeCallbacks(openTimeout);
-            currentSource = openingSource;
-            saves.setCurrent(openingDoc);
+            // Only a confirmed open (the editor reports a document) makes the file a save target.
+            saves.setCurrent(s.hasDocument ? openingDoc : null);
             flushOpen();
         }
-        if (!s.hasDocument && !policy.isOpening()) saves.setCurrent(null);
+        if (!policy.isOpening()) saves.onEditorState(s.hasDocument ? s.name : null);
         callbacks.onStateChanged(s);
     }
 
     @Override
     public void onSnapshot(String name, long rev, ByteBuffer docx) {
         if (!state.dirty) return;
+        String docName = name.isEmpty() ? state.name : name;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
-                name.isEmpty() ? state.name : name, currentSource, rev);
-        runIo(() -> recovery.writeQuietly(meta, docx));
+                docName, saves.sourceUriFor(docName), rev);
+        recovery.snapshot(meta, docx);
     }
 
     @Override
@@ -266,9 +259,15 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     }
 
     @Override
-    public void saved(String kind, CurrentDoc retargeted) {
+    public void saved(String kind) {
         policy.onSaveOk(kind);
-        if (retargeted != null) currentSource = retargeted.uri;
+        // The in-place backup is obsolete now; a still-dirty editor clears it on its clean transition.
+        if (SavePlan.retargetsCurrent(kind) && !state.dirty && !policy.isOpening()) recovery.clear();
+    }
+
+    @Override
+    public void backup(CurrentDoc doc, ByteBuffer bytes) {
+        recovery.backup(doc, bytes);
     }
 
     @Override

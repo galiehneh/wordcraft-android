@@ -6,11 +6,13 @@ import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.database.Cursor;
 import android.net.Uri;
+import android.os.ParcelFileDescriptor;
 import android.os.Process;
 import android.provider.OpenableColumns;
 
 import com.galiehneh.wordcraft.web.HostProtocol;
 
+import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -97,17 +99,42 @@ public final class DocumentRepository {
         if (!FileSniffer.isSupported(name, head, length)) throw new UnsupportedFileException(name);
     }
 
-    /** The original file is a save target again only while its write grant survived. */
+    /** The original file is a save target again only while its write grant survived and its name still matches. */
     public CurrentDoc restoredTarget(String sourceUri, String name) {
-        if (sourceUri.isEmpty() || !canWrite(Uri.parse(sourceUri))) return null;
-        return new CurrentDoc(sourceUri, name, true);
+        if (sourceUri.isEmpty()) return null;
+        Uri uri = Uri.parse(sourceUri);
+        if (!canWrite(uri)) return null;
+        return CurrentDocPolicy.restoredTarget(sourceUri, name, displayName(uri), true);
     }
 
-    /** Replaces the content of {@code uri} ("wt" truncates first). Call off the main thread. */
+    /**
+     * Replaces the content of {@code uri}: "wt" truncates first; a provider without "wt" gets mode
+     * "w" plus an explicit truncate after writing. Call off the main thread.
+     */
     public void write(Uri uri, ByteBuffer bytes) throws IOException {
-        try (OutputStream os = context.getContentResolver().openOutputStream(uri, "wt")) {
-            if (os == null) throw new IOException("No output stream for " + uri);
-            HostProtocol.writeTo(os, bytes.duplicate());
+        ContentResolver resolver = context.getContentResolver();
+        OutputStream os;
+        try {
+            os = resolver.openOutputStream(uri, "wt");
+        } catch (IllegalArgumentException | UnsupportedOperationException | FileNotFoundException e) {
+            writeWithoutTruncateMode(resolver, uri, bytes);
+            return;
+        }
+        try (OutputStream out = os) {
+            if (out == null) throw new IOException("No output stream for " + uri);
+            HostProtocol.writeTo(out, bytes.duplicate());
+        }
+    }
+
+    private static void writeWithoutTruncateMode(ContentResolver resolver, Uri uri, ByteBuffer bytes)
+            throws IOException {
+        ParcelFileDescriptor pfd = resolver.openFileDescriptor(uri, "w");
+        if (pfd == null) throw new IOException("No descriptor for " + uri);
+        // Closing the stream closes (and owns) the descriptor.
+        try (ParcelFileDescriptor.AutoCloseOutputStream out =
+                     new ParcelFileDescriptor.AutoCloseOutputStream(pfd)) {
+            HostProtocol.writeTo(out, bytes.duplicate());
+            out.getChannel().truncate(bytes.remaining());
         }
     }
 }

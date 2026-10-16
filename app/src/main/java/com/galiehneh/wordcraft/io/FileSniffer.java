@@ -1,5 +1,6 @@
 package com.galiehneh.wordcraft.io;
 
+import java.nio.ByteBuffer;
 import java.util.Locale;
 
 /** Extension plus magic-number check for files that arrive with a generic MIME type. Pure. */
@@ -30,6 +31,14 @@ public final class FileSniffer {
             default:
                 return false;
         }
+    }
+
+    /** True when {@code bytes} (from its position) begin with the ZIP local-header magic {@code PK\3\4}. */
+    public static boolean hasZipMagic(ByteBuffer bytes) {
+        if (bytes == null || bytes.remaining() < 4) return false;
+        int p = bytes.position();
+        return bytes.get(p) == 'P' && bytes.get(p + 1) == 'K'
+                && bytes.get(p + 2) == 0x03 && bytes.get(p + 3) == 0x04;
     }
 
     private static boolean startsWith(byte[] head, int length, int... magic) {

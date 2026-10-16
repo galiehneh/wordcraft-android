@@ -4,6 +4,10 @@ import static org.junit.Assert.assertEquals;
 import static org.junit.Assert.assertFalse;
 import static org.junit.Assert.assertTrue;
 
+import java.io.FileNotFoundException;
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
 import org.junit.Test;
 
 public class SavePlanTest {
@@ -46,5 +50,50 @@ public class SavePlanTest {
         assertFalse(SavePlan.retargetsCurrent("export"));
         assertTrue(SavePlan.retargetsCurrent("save"));
         assertTrue(SavePlan.retargetsCurrent("saveAs"));
+    }
+
+    @Test
+    public void onlyDocumentedKindsAreKnown() {
+        assertTrue(SavePlan.isKnownKind("save"));
+        assertTrue(SavePlan.isKnownKind("saveAs"));
+        assertTrue(SavePlan.isKnownKind("export"));
+        assertFalse(SavePlan.isKnownKind(""));
+        assertFalse(SavePlan.isKnownKind(null));
+        assertFalse(SavePlan.isKnownKind("SAVE"));
+        assertFalse(SavePlan.isKnownKind("delete"));
+    }
+
+    @Test
+    public void exportToTheOpenFileIsRefused() {
+        assertTrue(SavePlan.exportOverwritesCurrent("export", "content://x/1", WRITABLE));
+        assertFalse(SavePlan.exportOverwritesCurrent("export", "content://x/2", WRITABLE));
+        assertFalse(SavePlan.exportOverwritesCurrent("export", "content://x/1", null));
+        assertFalse(SavePlan.exportOverwritesCurrent("saveAs", "content://x/1", WRITABLE));
+    }
+
+    @Test
+    public void inPlaceNeedsNonEmptyZipBytes() {
+        assertTrue(SavePlan.canWriteInPlace(ByteBuffer.wrap(new byte[]{'P', 'K', 3, 4, 0})));
+        assertFalse(SavePlan.canWriteInPlace(ByteBuffer.allocate(0)));
+        assertFalse(SavePlan.canWriteInPlace(ByteBuffer.wrap(new byte[]{'P', 'K', 3})));
+        assertFalse(SavePlan.canWriteInPlace(ByteBuffer.wrap(new byte[]{'P', 'K', 5, 6})));
+        assertFalse(SavePlan.canWriteInPlace(ByteBuffer.wrap("{\\rtf1".getBytes())));
+        assertFalse(SavePlan.canWriteInPlace(null));
+    }
+
+    @Test
+    public void inPlaceMagicIsReadFromTheBufferPosition() {
+        ByteBuffer b = ByteBuffer.wrap(new byte[]{0, 'P', 'K', 3, 4});
+        b.position(1);
+        assertTrue(SavePlan.canWriteInPlace(b));
+    }
+
+    @Test
+    public void unwritableTargetsAreRepickedButIoErrorsFail() {
+        assertTrue(SavePlan.shouldRepick(new SecurityException()));
+        assertTrue(SavePlan.shouldRepick(new FileNotFoundException()));
+        assertTrue(SavePlan.shouldRepick(new UnsupportedOperationException()));
+        assertFalse(SavePlan.shouldRepick(new IOException("disk full")));
+        assertFalse(SavePlan.shouldRepick(new IllegalStateException()));
     }
 }

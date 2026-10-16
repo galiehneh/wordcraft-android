@@ -17,7 +17,7 @@ Pesan teks = JSON `{ "type": ..., ...}`. Pesan biner = ArrayBuffer frame:
 | type | field header | payload |
 |---|---|---|
 | `ready` | - | - |
-| `state` | `dirty`, `hasDocument`, `editMode`, `backstage`, `dialog` (bool), `name` (string) | - |
+| `state` | `dirty`, `hasDocument`, `editMode`, `backstage`, `dialog` (bool), `name` (string), `rev`, `encrypted` (bool; dokumen berpassword — host WAJIB menghapus snapshot recovery dan tidak boleh menyimpan yang baru) | - |
 | `save` | `ticket` (u32), `kind` (`save`\|`saveAs`\|`export`), `name`, `mime` | file bytes |
 | `snapshot` | `name`, `rev` (u64) | docx bytes |
 | `print` | `name` (nama dokumen tanpa ekstensi Word; host menambah `.pdf`) | PDF bytes |

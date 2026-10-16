@@ -67,7 +67,8 @@ public final class WebViewHost {
         settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
-        settings.setMediaPlaybackRequiresUserGesture(false);
+        settings.setMediaPlaybackRequiresUserGesture(true);
+        settings.setGeolocationEnabled(false);
         disableForcedDarkening(settings);
 
         webView.setFocusable(true);
@@ -115,7 +116,8 @@ public final class WebViewHost {
                 case ALLOW_IN_APP:
                     return false;
                 case OPEN_EXTERNAL:
-                    callbacks.onExternalUrl(uri);
+                    // Only a user-initiated navigation; openExternal from the editor uses the bridge.
+                    if (request.hasGesture()) callbacks.onExternalUrl(uri);
                     return true;
                 default:
                     return true;

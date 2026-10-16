@@ -113,8 +113,8 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
         }
     }
 
-    public void sendOpen(String url, String name) {
-        send("open", "url", url, "name", name);
+    public void sendOpen(String url, String name, boolean recovered) {
+        send("open", "url", url, "name", name, "recovered", recovered);
     }
 
     public void sendSaveResult(long ticket, String outcome, String message) {

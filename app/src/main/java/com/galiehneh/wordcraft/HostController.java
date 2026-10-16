@@ -45,11 +45,13 @@ final class HostController implements HostBridge.Listener {
         final DocSource source;
         final String name;
         final String sourceUri;
+        final boolean recovered;
 
-        Pending(DocSource source, String name, String sourceUri) {
+        Pending(DocSource source, String name, String sourceUri, boolean recovered) {
             this.source = source;
             this.name = name;
             this.sourceUri = sourceUri;
+            this.recovered = recovered;
         }
     }
 
@@ -102,7 +104,7 @@ final class HostController implements HostBridge.Listener {
                 String name = documents.displayName(uri);
                 documents.probe(uri);
                 DocSource source = () -> documents.openStream(uri);
-                main.post(() -> queueOpen(new Pending(source, name, uri.toString())));
+                main.post(() -> queueOpen(new Pending(source, name, uri.toString(), false)));
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
@@ -125,7 +127,7 @@ final class HostController implements HostBridge.Listener {
         pending = null;
         currentSource = p.sourceUri;
         guardClear = true;
-        bridge.sendOpen(WebViewHost.DOC_URL_PREFIX + tokens.issue(p.source), p.name);
+        bridge.sendOpen(WebViewHost.DOC_URL_PREFIX + tokens.issue(p.source), p.name, p.recovered);
     }
 
     private void restoreRecovery() {
@@ -135,7 +137,7 @@ final class HostController implements HostBridge.Listener {
             DocSource source = () -> new FileInputStream(recovery.docFile());
             main.post(() -> {
                 if (pending == null && !state.hasDocument) {
-                    queueOpen(new Pending(source, meta.name, meta.sourceUri));
+                    queueOpen(new Pending(source, meta.name, meta.sourceUri, true));
                 }
             });
         });

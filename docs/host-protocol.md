@@ -38,7 +38,7 @@ Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counte
 
 | event | field | efek |
 |---|---|---|
-| `open` | `url` (`/__host/doc/<token>`), `name` | `wordcraft_open_url(url, name)` |
+| `open` | `url` (`/__host/doc/<token>`), `name`, `recovered` (bool; true = restore dari snapshot, editor menandai dirty) | `wordcraft_open_url(url, name)` |
 | `saveResult` | `ticket`, `outcome` (`ok`\|`cancelled`\|`failed`), `message` | `wordcraft_save_result(ticket, outcome, msg)` |
 | `back` | - | `wordcraft_back() -> bool`, JS balas `backResult` |
 | `snapshotNow` | - | `wordcraft_snapshot_now() -> Option<Uint8Array>`, JS kirim `snapshot` |

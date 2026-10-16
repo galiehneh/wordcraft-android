@@ -7,8 +7,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-c8b61d586b1f5f1f.js';
-const wasm = await init({ module_or_path: './wordcraft-web-c8b61d586b1f5f1f_bg.wasm' });
+import init, * as bindings from './wordcraft-web-5394b162e46f96e2.js';
+const wasm = await init({ module_or_path: './wordcraft-web-5394b162e46f96e2_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -19,12 +19,92 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
 </script>
   <style>
     html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #e6e6e6; }
-    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+    #wordcraft_canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; outline: none; }
     #wordcraft_loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center;
       color: #555; font: 14px system-ui, sans-serif; pointer-events: none; }
   </style>
   <script>
     (function() {
+      // Helper to find the hidden input element created by eframe TextAgent
+      function getTextAgentInput() {
+        return document.querySelector('input[type="text"]') || document.querySelector('input');
+      }
+
+      function notifyShowKeyboard() {
+        if (window.WordCraftAndroid && window.WordCraftAndroid.showKeyboard) {
+          window.WordCraftAndroid.showKeyboard();
+        }
+      }
+
+      function notifyHideKeyboard() {
+        if (window.WordCraftAndroid && window.WordCraftAndroid.hideKeyboard) {
+          window.WordCraftAndroid.hideKeyboard();
+        }
+      }
+
+      window.showSoftKeyboard = function() {
+        const input = getTextAgentInput();
+        if (input) {
+          try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
+        }
+        notifyShowKeyboard();
+      };
+
+      window.hideSoftKeyboard = function() {
+        const input = getTextAgentInput();
+        if (input) {
+          try { input.blur(); } catch (e) {}
+        }
+        notifyHideKeyboard();
+      };
+
+      window.setWordCraftEditMode = function(on) {
+        window.isWordCraftEditMode = on;
+        if (!on) {
+          window.hideSoftKeyboard();
+        }
+      };
+
+      window.setDocumentOpened = function(opened) {
+        if (window.WordCraftAndroid && window.WordCraftAndroid.setDocumentOpened) {
+          window.WordCraftAndroid.setDocumentOpened(opened);
+        }
+      };
+
+      function hookAgentInput(input) {
+        if (!input || input.__agentHooked) return;
+        input.__agentHooked = true;
+        input.addEventListener('focus', function() {
+          notifyShowKeyboard();
+        });
+        input.addEventListener('blur', function() {
+          notifyHideKeyboard();
+        });
+      }
+
+      const agentObserver = new MutationObserver(function() {
+        const input = getTextAgentInput();
+        if (input) hookAgentInput(input);
+      });
+      agentObserver.observe(document.documentElement, { childList: true, subtree: true });
+
+      // When canvas is tapped on mobile:
+      document.addEventListener('DOMContentLoaded', function() {
+        const canvas = document.getElementById('wordcraft_canvas');
+        if (canvas) {
+          canvas.setAttribute('tabindex', '0');
+          canvas.addEventListener('touchend', function(e) {
+            if (window.isWordCraftEditMode) {
+              const input = getTextAgentInput();
+              if (input) {
+                try { input.focus({ preventScroll: true }); } catch (err) { input.focus(); }
+              }
+              notifyShowKeyboard();
+            }
+          }, { passive: true });
+        }
+      });
+
       const origClick = HTMLAnchorElement.prototype.click;
       HTMLAnchorElement.prototype.click = function() {
         if (this.href && this.href.startsWith("blob:") && window.WordCraftAndroid) {
@@ -65,7 +145,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       }, false);
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-c8b61d586b1f5f1f.js" crossorigin="anonymous" integrity="sha384-9r5JNpGcgbgOpP7yFFbEzoqmPhQHlt0xucc84MnQ32cAa7n4kp7Rjve0YhYLtehy"><link rel="preload" href="./wordcraft-web-c8b61d586b1f5f1f_bg.wasm" crossorigin="anonymous" integrity="sha384-sXyi+T9f8C/yQvpYvbJoaFPxbEIFVFRoeYuczc0AAQeXbEDl7BBx/4Wh3eWyrTn4" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="./wordcraft-web-5394b162e46f96e2.js" crossorigin="anonymous" integrity="sha384-8KdwyaTnrySnaXcfY6UGUkz48fXApGQSKFRMFg9g/kKQvWDcXBrsfREWdldYZXdW"><link rel="preload" href="./wordcraft-web-5394b162e46f96e2_bg.wasm" crossorigin="anonymous" integrity="sha384-nLZH2LU8biSUtodkoD0aillnfUUajwDfQHmliJM16M7d4EPIbpY6jICr1VLSPBff" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>

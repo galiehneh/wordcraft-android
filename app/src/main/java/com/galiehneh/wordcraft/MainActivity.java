@@ -18,8 +18,10 @@ import android.util.Base64;
 import android.util.Log;
 import android.util.TypedValue;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.inputmethod.InputMethodManager;
 import android.webkit.JavascriptInterface;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
@@ -208,6 +210,25 @@ public class MainActivity extends Activity {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
             settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
         }
+
+        webView.setFocusable(true);
+        webView.setFocusableInTouchMode(true);
+        webView.requestFocus(View.FOCUS_DOWN);
+
+        webView.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                switch (event.getAction()) {
+                    case MotionEvent.ACTION_DOWN:
+                    case MotionEvent.ACTION_UP:
+                        if (!v.hasFocus()) {
+                            v.requestFocus();
+                        }
+                        break;
+                }
+                return false;
+            }
+        });
 
         webView.addJavascriptInterface(new AndroidDownloadBridge(), "WordCraftAndroid");
 
@@ -486,6 +507,41 @@ public class MainActivity extends Activity {
     }
 
     private class AndroidDownloadBridge {
+        @JavascriptInterface
+        public void showKeyboard() {
+            runOnUiThread(() -> {
+                if (webView != null) {
+                    webView.requestFocus();
+                    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.showSoftInput(webView, InputMethodManager.SHOW_IMPLICIT);
+                        imm.showSoftInput(webView, 0);
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void hideKeyboard() {
+            runOnUiThread(() -> {
+                if (webView != null) {
+                    InputMethodManager imm = (InputMethodManager) getSystemService(INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.hideSoftInputFromWindow(webView.getWindowToken(), 0);
+                    }
+                }
+            });
+        }
+
+        @JavascriptInterface
+        public void setDocumentOpened(boolean opened) {
+            runOnUiThread(() -> {
+                if (fab != null) {
+                    fab.setVisibility(opened ? View.GONE : View.VISIBLE);
+                }
+            });
+        }
+
         @JavascriptInterface
         public void saveBlob(String dataUrl, String filename) {
             if (dataUrl == null || !dataUrl.contains(",")) return;

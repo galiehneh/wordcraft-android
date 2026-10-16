@@ -71,6 +71,7 @@ final class HostController implements HostBridge.Listener {
     private HostBridge bridge;
     private HostState state = HostState.EMPTY;
     private boolean ready;
+    private boolean destroyed;
     private boolean launchOpenExpected;
     private boolean backPending;
     private Pending pending;
@@ -94,6 +95,7 @@ final class HostController implements HostBridge.Listener {
         backPending = false;
         ready = false;
         state = HostState.EMPTY;
+        if (bridge != null) bridge.detach();
         bridge = new HostBridge(this);
         callbacks.onStateChanged(state);
         return bridge;
@@ -104,7 +106,7 @@ final class HostController implements HostBridge.Listener {
     }
 
     void openUri(Uri uri) {
-        io.execute(() -> {
+        runIo(() -> {
             try {
                 String name = documents.displayName(uri);
                 documents.probe(uri);
@@ -113,6 +115,7 @@ final class HostController implements HostBridge.Listener {
             } catch (IOException | SecurityException e) {
                 Log.e(TAG, "Cannot open " + uri, e);
                 main.post(() -> {
+                    if (destroyed) return;
                     launchOpenExpected = false;
                     callbacks.toast(R.string.open_failed);
                     if (ready) restoreRecovery();
@@ -121,7 +124,19 @@ final class HostController implements HostBridge.Listener {
         });
     }
 
+    private void runIo(Runnable task) {
+        if (!destroyed) io.execute(task);
+    }
+
+    /** Runs on the UI thread only while the activity lives and {@code target} is still the bound bridge. */
+    private void postIfCurrent(HostBridge target, Runnable task) {
+        main.post(() -> {
+            if (!destroyed && target == bridge) task.run();
+        });
+    }
+
     private void queueOpen(Pending p) {
+        if (destroyed) return;
         launchOpenExpected = false;
         pending = p;
         if (ready) flushOpen();
@@ -148,7 +163,7 @@ final class HostController implements HostBridge.Listener {
 
     private void restoreRecovery() {
         if (!policy.tryBeginRestore(pending != null, launchOpenExpected)) return;
-        io.execute(() -> {
+        runIo(() -> {
             RecoveryStore.Meta meta = recovery.readMeta();
             if (meta == null) {
                 main.post(policy::onRestoreMissing);
@@ -156,7 +171,7 @@ final class HostController implements HostBridge.Listener {
             }
             DocSource source = () -> new FileInputStream(recovery.docFile());
             main.post(() -> {
-                if (policy.acceptRestore(pending != null)) {
+                if (!destroyed && policy.acceptRestore(pending != null)) {
                     queueOpen(new Pending(source, meta.name, meta.sourceUri, true));
                 }
             });
@@ -171,6 +186,9 @@ final class HostController implements HostBridge.Listener {
     }
 
     void shutdown() {
+        destroyed = true;
+        if (bridge != null) bridge.detach();
+        bridge = null;
         main.removeCallbacksAndMessages(null);
         io.shutdown();
     }
@@ -214,7 +232,7 @@ final class HostController implements HostBridge.Listener {
     public void onState(HostState s) {
         boolean wasOpening = policy.isOpening();
         state = s;
-        if (policy.onState(s)) io.execute(recovery::clear);
+        if (policy.onState(s)) runIo(recovery::clear);
         if (wasOpening && !policy.isOpening()) {
             main.removeCallbacks(openTimeout);
             currentSource = openingSource;
@@ -228,7 +246,7 @@ final class HostController implements HostBridge.Listener {
         if (!state.dirty) return;
         RecoveryStore.Meta meta = new RecoveryStore.Meta(
                 name.isEmpty() ? state.name : name, currentSource, rev);
-        io.execute(() -> {
+        runIo(() -> {
             try {
                 recovery.write(meta, docx);
             } catch (IOException | OutOfMemoryError e) {
@@ -242,17 +260,17 @@ final class HostController implements HostBridge.Listener {
         String fileName = FileNames.sanitize(name);
         String type = mime.isEmpty() ? MimeMap.of(fileName) : mime;
         HostBridge target = bridge;
-        io.execute(() -> {
+        runIo(() -> {
             try {
                 documents.saveToDownloads(fileName, type, bytes);
-                main.post(() -> {
+                postIfCurrent(target, () -> {
                     policy.onSaveOk(kind);
                     target.sendSaveResult(ticket, "ok", fileName);
                     callbacks.toast(R.string.saved_to_downloads, fileName);
                 });
             } catch (IOException | OutOfMemoryError e) {
                 Log.e(TAG, "Save failed", e);
-                main.post(() -> {
+                postIfCurrent(target, () -> {
                     target.sendSaveResult(ticket, "failed", String.valueOf(e.getMessage()));
                     callbacks.toast(R.string.save_failed);
                 });
@@ -262,7 +280,8 @@ final class HostController implements HostBridge.Listener {
 
     @Override
     public void onSaveRejected(long ticket, String reason) {
-        if (bridge != null) bridge.sendSaveResult(ticket, "failed", reason);
+        if (destroyed || bridge == null) return;
+        bridge.sendSaveResult(ticket, "failed", reason);
         callbacks.toast(R.string.save_failed);
     }
 

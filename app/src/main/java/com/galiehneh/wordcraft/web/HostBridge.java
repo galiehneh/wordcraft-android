@@ -47,6 +47,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
     private final ChunkAssembler chunks = new ChunkAssembler();
     private JavaScriptReplyProxy proxy;
     private String currentHeader;
+    private volatile boolean detached;
 
     public HostBridge(Listener listener) {
         this.listener = listener;
@@ -55,7 +56,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
     @Override
     public void onPostMessage(@NonNull WebView view, @NonNull WebMessageCompat message,
                               @NonNull Uri sourceOrigin, boolean isMainFrame, @NonNull JavaScriptReplyProxy replyProxy) {
-        if (!isMainFrame) return;
+        if (!isMainFrame || detached) return;
         proxy = replyProxy;
         currentHeader = null;
         try {
@@ -143,6 +144,11 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
         }
     }
 
+    /** Stops delivering and sending: this bridge belongs to a WebView that is gone. */
+    public void detach() {
+        detached = true;
+    }
+
     public void sendOpen(String url, String name, boolean recovered) {
         send("open", "url", url, "name", name, "recovered", recovered);
     }
@@ -161,6 +167,7 @@ public final class HostBridge implements WebViewCompat.WebMessageListener {
 
     /** Posts {@code {"type":type, k1:v1, ...}} to the page; dropped (logged) before the first message. */
     private void send(String type, Object... keyValues) {
+        if (detached) return;
         if (proxy == null) {
             Log.w(TAG, "Host event dropped before ready: " + type);
             return;

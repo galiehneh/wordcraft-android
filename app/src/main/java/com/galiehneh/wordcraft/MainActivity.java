@@ -2,6 +2,7 @@ package com.galiehneh.wordcraft;
 
 import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
@@ -49,7 +50,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         root = new FrameLayout(this);
         root.setLayoutParams(new ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
-        InsetsController.apply(root);
+        InsetsController.apply(getWindow(), root);
         fab = createFabButton();
         root.addView(fab);
         setContentView(root);
@@ -94,6 +95,12 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
         if (intent != null && IntentRouter.isDocumentAction(intent.getAction())) {
             openFromIntent(intent, false);
         }
+    }
+
+    @Override
+    public void onConfigurationChanged(Configuration newConfig) {
+        super.onConfigurationChanged(newConfig);
+        InsetsController.updateBarAppearance(getWindow(), root);
     }
 
     @Override

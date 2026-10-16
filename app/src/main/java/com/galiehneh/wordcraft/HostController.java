@@ -33,6 +33,9 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     interface Callbacks {
         void onStateChanged(HostState state);
 
+        /** The editor page sent {@code ready}. */
+        void onEditorReady();
+
         /** The editor does not consume Back: leave the app. */
         void exit(boolean dirty);
 
@@ -205,6 +208,7 @@ final class HostController implements HostBridge.Listener, SaveCoordinator.Host 
     @Override
     public void onReady() {
         ready = true;
+        callbacks.onEditorReady();
         policy.onReady();
         if (pending != null) {
             flushOpen();

@@ -20,6 +20,7 @@
             android:configChanges="uiMode|density|fontScale|keyboard|keyboardHidden|navigation|locale|layoutDirection|screenLayout|smallestScreenSize|orientation|screenSize"
             android:exported="true"
             android:launchMode="singleTask"
+            android:theme="@style/Theme.WordCraft.Splash"
             android:windowSoftInputMode="adjustResize">
 
             <intent-filter>

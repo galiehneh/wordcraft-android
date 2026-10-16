@@ -18,6 +18,7 @@ import android.widget.Toast;
 
 import androidx.activity.ComponentActivity;
 import androidx.activity.OnBackPressedCallback;
+import androidx.core.splashscreen.SplashScreen;
 import androidx.core.view.WindowCompat;
 import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
@@ -34,6 +35,7 @@ import com.galiehneh.wordcraft.web.WebViewHost;
 public class MainActivity extends ComponentActivity implements HostController.Callbacks, WebViewHost.Callbacks {
     private static final int MAX_CRASHES = 2;
     private static final long CRASH_WINDOW_MS = 60_000;
+    private static final long SPLASH_TIMEOUT_MS = 10_000;
 
     private FrameLayout root;
     private WebView webView;
@@ -45,9 +47,13 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     private OnBackPressedCallback backCallback;
     private final CrashLimiter crashLimiter = new CrashLimiter(MAX_CRASHES, CRASH_WINDOW_MS);
     private final Handler handler = new Handler(Looper.getMainLooper());
+    private boolean splashDone;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        // Keep the splash until the editor reports ready (or the timeout), so there is no blank WebView.
+        SplashScreen.installSplashScreen(this).setKeepOnScreenCondition(() -> !splashDone);
+        handler.postDelayed(() -> splashDone = true, SPLASH_TIMEOUT_MS);
         super.onCreate(savedInstanceState);
 
         root = new FrameLayout(this);
@@ -159,6 +165,7 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     }
 
     private void showFatal(int messageRes) {
+        splashDone = true;
         root.removeAllViews();
         TextView message = new TextView(this);
         message.setText(messageRes);
@@ -204,6 +211,11 @@ public class MainActivity extends ComponentActivity implements HostController.Ca
     }
 
     // HostController.Callbacks ----------------------------------------------------------------
+
+    @Override
+    public void onEditorReady() {
+        splashDone = true;
+    }
 
     @Override
     public void onStateChanged(HostState state) {

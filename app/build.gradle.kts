@@ -53,3 +53,12 @@ android {
         targetCompatibility = JavaVersion.VERSION_17
     }
 }
+
+dependencies {
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.core)
+    implementation(libs.androidx.webkit)
+    implementation(libs.androidx.core.splashscreen)
+
+    testImplementation(libs.junit)
+}

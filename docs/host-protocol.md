@@ -14,8 +14,6 @@ Pesan teks = JSON `{ "type": ..., ...}`. Pesan biner = ArrayBuffer frame:
 [u32 LE headerLen][header JSON UTF-8][payload bytes]
 ```
 
-Fallback bila `WEB_MESSAGE_ARRAY_BUFFER` tak didukung: payload base64 per chunk 512 KB, header memuat `chunk`, `chunks`, `id`.
-
 | type | field header | payload |
 |---|---|---|
 | `ready` | - | - |
@@ -38,7 +36,7 @@ Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counte
 
 | event | field | efek |
 |---|---|---|
-| `open` | `url` (`/__host/doc/<token>`), `name`, `recovered` (bool; true = restore dari snapshot, editor menandai dirty) | `wordcraft_open_url(url, name)` |
+| `open` | `url` (`/__host/doc/<token>`), `name`, `recovered` (bool; true = restore dari snapshot, editor menandai dirty) | `wordcraft_open_url(url, name, recovered?)` |
 | `saveResult` | `ticket`, `outcome` (`ok`\|`cancelled`\|`failed`), `message` | `wordcraft_save_result(ticket, outcome, msg)` |
 | `back` | - | `wordcraft_back() -> bool`, JS balas `backResult` |
 | `snapshotNow` | - | `wordcraft_snapshot_now() -> Option<Uint8Array>`, JS kirim `snapshot` |
@@ -53,4 +51,4 @@ Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counte
 
 ## Export wasm (Trunk global `window.wasmBindings`)
 
-`wordcraft_open_url(url, name)`, `wordcraft_save_result(ticket, outcome, msg)`, `wordcraft_back() -> bool`, `wordcraft_snapshot_now() -> Option<Uint8Array>`.
+`wordcraft_open_url(url, name, recovered?)`, `wordcraft_save_result(ticket, outcome, msg)`, `wordcraft_back() -> bool`, `wordcraft_snapshot_now() -> Option<Uint8Array>`.

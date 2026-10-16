@@ -20,7 +20,7 @@ Pesan teks = JSON `{ "type": ..., ...}`. Pesan biner = ArrayBuffer frame:
 | `state` | `dirty`, `hasDocument`, `editMode`, `backstage`, `dialog` (bool), `name` (string) | - |
 | `save` | `ticket` (u32), `kind` (`save`\|`saveAs`\|`export`), `name`, `mime` | file bytes |
 | `snapshot` | `name`, `rev` (u64) | docx bytes |
-| `print` | `name` | PDF bytes |
+| `print` | `name` (nama dokumen tanpa ekstensi Word; host menambah `.pdf`) | PDF bytes |
 | `ime` | `visible` (bool) | - |
 | `pickOpen` | - | - |
 | `openExternal` | `url` | - |
@@ -37,7 +37,7 @@ Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counte
 | event | field | efek |
 |---|---|---|
 | `open` | `url` (`/__host/doc/<token>`), `name`, `recovered` (bool; true = restore dari snapshot, editor menandai dirty) | `wordcraft_open_url(url, name, recovered?)` |
-| `saveResult` | `ticket`, `outcome` (`ok`\|`cancelled`\|`failed`), `message` | `wordcraft_save_result(ticket, outcome, msg)` |
+| `saveResult` | `ticket`, `outcome` (`ok`\|`cancelled`\|`failed`), `message`, `name?` (nama file yang benar-benar ditulis; dipakai editor hanya untuk `saveAs` ok) | `wordcraft_save_result(ticket, outcome, msg, name?)` |
 | `back` | - | `wordcraft_back() -> bool`, JS balas `backResult` |
 | `snapshotNow` | - | `wordcraft_snapshot_now() -> Option<Uint8Array>`, JS kirim `snapshot` |
 
@@ -51,4 +51,11 @@ Aturan angka: semua bilangan di JSON <= 2^53. `ticket` u32. `rev` number (counte
 
 ## Export wasm (Trunk global `window.wasmBindings`)
 
-`wordcraft_open_url(url, name, recovered?)`, `wordcraft_save_result(ticket, outcome, msg)`, `wordcraft_back() -> bool`, `wordcraft_snapshot_now() -> Option<Uint8Array>`.
+`wordcraft_open_url(url, name, recovered?)`, `wordcraft_save_result(ticket, outcome, msg, name?)`, `wordcraft_back() -> bool`, `wordcraft_snapshot_now() -> Option<Uint8Array>`.
+
+## Aturan save (kind)
+
+- `save`: hanya nama `.docx`; boleh ditulis di tempat ke URI sumber bila writable dan nama sama.
+- `saveAs`: selalu lewat CreateDocument; editor menolak `save`/`saveAs` kedua selama `saveAs` pertama belum dijawab. Jawab dengan `name` bila nama final berbeda.
+- `export`: semua nama non-docx (pdf/png/odt/rtf/txt/...). Tidak pernah menimpa URI sumber dan tidak mengubah dokumen aktif; boleh bersamaan.
+- `WordCraftSync.getClipboardText/Html` mengembalikan `""` bila halaman bukan origin app atau teks > 5M karakter.

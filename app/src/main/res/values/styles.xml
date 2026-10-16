@@ -1,7 +1,13 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.WordCraft" parent="@android:style/Theme.NoTitleBar.Fullscreen">
-        <item name="android:windowBackground">#19191c</item>
-        <item name="android:navigationBarColor">#19191c</item>
+    <style name="Theme.WordCraft" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:windowBackground">@color/window_background</item>
+        <item name="android:navigationBarColor">@color/window_background</item>
+    </style>
+
+    <style name="Theme.WordCraft.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/window_background</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="postSplashScreenTheme">@style/Theme.WordCraft</item>
     </style>
 </resources>

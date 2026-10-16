@@ -14,14 +14,14 @@ val signingProperties = Properties().apply {
 
 android {
     namespace = "com.galiehneh.wordcraft"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.galiehneh.wordcraft"
         minSdk = 24
-        targetSdk = 35
-        versionCode = 20261019
-        versionName = "2026.10.16.3"
+        targetSdk = 36
+        versionCode = 20261021
+        versionName = "2026.10.16.5"
     }
 
     signingConfigs {
@@ -32,15 +32,19 @@ android {
                 storePassword = signingProperties.getProperty("storePassword")
                 keyAlias = signingProperties.getProperty("keyAlias")
                 keyPassword = signingProperties.getProperty("keyPassword")
-                enableV1Signing = true
                 enableV2Signing = true
             }
         }
     }
 
+    buildFeatures {
+        buildConfig = true
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             if (signingPropertiesFile.isFile) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -52,4 +56,13 @@ android {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
+}
+
+dependencies {
+    implementation(libs.androidx.activity)
+    implementation(libs.androidx.core)
+    implementation(libs.androidx.webkit)
+    implementation(libs.androidx.core.splashscreen)
+
+    testImplementation(libs.junit)
 }

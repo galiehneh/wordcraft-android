@@ -12,6 +12,7 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
+import androidx.webkit.WebSettingsCompat;
 import androidx.webkit.WebViewAssetLoader;
 import androidx.webkit.WebViewCompat;
 import androidx.webkit.WebViewFeature;
@@ -67,6 +68,7 @@ public final class WebViewHost {
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
+        disableForcedDarkening(settings);
 
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
@@ -124,6 +126,19 @@ public final class WebViewHost {
         public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
             callbacks.onRenderGone();
             return true;
+        }
+    }
+
+    /**
+     * The editor has its own light/dark theme and follows {@code prefers-color-scheme} itself; the WebView must
+     * not darken it a second time. Only the forced/algorithmic darkening is turned off, the media query is untouched.
+     */
+    @SuppressWarnings("deprecation")
+    private static void disableForcedDarkening(WebSettings settings) {
+        if (WebViewFeature.isFeatureSupported(WebViewFeature.ALGORITHMIC_DARKENING)) {
+            WebSettingsCompat.setAlgorithmicDarkeningAllowed(settings, false);
+        } else if (WebViewFeature.isFeatureSupported(WebViewFeature.FORCE_DARK)) {
+            WebSettingsCompat.setForceDark(settings, WebSettingsCompat.FORCE_DARK_OFF);
         }
     }
 }

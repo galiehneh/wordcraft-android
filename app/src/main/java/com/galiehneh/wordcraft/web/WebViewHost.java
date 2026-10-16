@@ -1,12 +1,10 @@
 package com.galiehneh.wordcraft.web;
 
 import android.annotation.SuppressLint;
-import android.content.Context;
 import android.net.Uri;
-import android.os.Build;
-import android.util.Log;
 import android.view.MotionEvent;
 import android.view.View;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.ValueCallback;
 import android.webkit.WebChromeClient;
 import android.webkit.WebResourceRequest;
@@ -15,63 +13,71 @@ import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
 
-import com.galiehneh.wordcraft.io.DocumentRepository;
-import com.galiehneh.wordcraft.io.MimeMap;
+import androidx.webkit.WebViewAssetLoader;
+import androidx.webkit.WebViewCompat;
+import androidx.webkit.WebViewFeature;
+
+import com.galiehneh.wordcraft.BuildConfig;
 import com.galiehneh.wordcraft.ui.FileChooser;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
-import java.util.HashMap;
-import java.util.Map;
+import java.util.Collections;
 
-/** Configures the WebView and serves bundled assets from the app origin. */
+/** Locks down and configures a WebView that serves the editor from the app origin. */
 public final class WebViewHost {
-    private static final String TAG = "WordCraft";
-    public static final String BASE_URL = "https://appassets.androidplatform.net/index.html";
-    public static final String JS_BRIDGE_NAME = "WordCraftAndroid";
+    public static final String BASE_URL = "https://" + NavPolicy.APP_HOST + "/index.html";
+    public static final String DOC_URL_PREFIX = "/__host/doc/";
+    public static final String JS_OBJECT_NAME = "WordCraftHost";
+    private static final String ORIGIN = "https://" + NavPolicy.APP_HOST;
 
-    private final Context context;
-    private final WebView webView;
-    private final FileChooser fileChooser;
+    /** Events the host activity must react to (UI thread). */
+    public interface Callbacks {
+        void onRenderGone();
 
-    public WebViewHost(Context context, WebView webView, FileChooser fileChooser) {
-        this.context = context;
-        this.webView = webView;
-        this.fileChooser = fileChooser;
+        void onExternalUrl(Uri uri);
     }
 
-    @SuppressLint({"SetJavaScriptEnabled", "AddJavascriptInterface"})
-    public void configure(HostBridge bridge) {
+    private final Callbacks callbacks;
+    private final FileChooser fileChooser;
+    private final WebViewAssetLoader loader;
+
+    public WebViewHost(android.content.Context context, DocTokenStore tokens, Callbacks callbacks, FileChooser fileChooser) {
+        this.callbacks = callbacks;
+        this.fileChooser = fileChooser;
+        this.loader = new WebViewAssetLoader.Builder()
+                .setDomain(NavPolicy.APP_HOST)
+                .addPathHandler(DOC_URL_PREFIX, new HostPathHandlers.Docs(tokens))
+                .addPathHandler("/", new HostPathHandlers.Assets(context))
+                .build();
+    }
+
+    /** @return false if this WebView cannot host the bridge (no WebMessageListener support). */
+    @SuppressLint("SetJavaScriptEnabled")
+    public boolean configure(WebView webView, HostBridge bridge) {
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.DEBUG);
         WebSettings settings = webView.getSettings();
         settings.setJavaScriptEnabled(true);
         settings.setDomStorageEnabled(true);
-        settings.setDatabaseEnabled(true);
-        settings.setAllowFileAccess(true);
-        settings.setAllowContentAccess(true);
+        settings.setAllowFileAccess(false);
+        settings.setAllowContentAccess(false);
+        settings.setSupportMultipleWindows(false);
+        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_NEVER_ALLOW);
         settings.setLoadWithOverviewMode(true);
         settings.setUseWideViewPort(true);
         settings.setBuiltInZoomControls(false);
         settings.setDisplayZoomControls(false);
         settings.setMediaPlaybackRequiresUserGesture(false);
-        settings.setMixedContentMode(WebSettings.MIXED_CONTENT_ALWAYS_ALLOW);
 
         webView.setFocusable(true);
         webView.setFocusableInTouchMode(true);
         webView.requestFocus(View.FOCUS_DOWN);
-        webView.setOnTouchListener(new View.OnTouchListener() {
-            @Override
-            public boolean onTouch(View v, MotionEvent event) {
-                int action = event.getAction();
-                if ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) && !v.hasFocus()) {
-                    v.requestFocus();
-                }
-                return false;
+        webView.setOnTouchListener((v, event) -> {
+            int action = event.getAction();
+            if ((action == MotionEvent.ACTION_DOWN || action == MotionEvent.ACTION_UP) && !v.hasFocus()) {
+                v.requestFocus();
             }
+            return false;
         });
 
-        webView.addJavascriptInterface(bridge, JS_BRIDGE_NAME);
         webView.setWebViewClient(new AssetClient());
         webView.setWebChromeClient(new WebChromeClient() {
             @Override
@@ -79,49 +85,38 @@ public final class WebViewHost {
                 return fileChooser.onShowFileChooser(callback, params);
             }
         });
+
+        if (!WebViewFeature.isFeatureSupported(WebViewFeature.WEB_MESSAGE_LISTENER)) {
+            return false;
+        }
+        WebViewCompat.addWebMessageListener(webView, JS_OBJECT_NAME, Collections.singleton(ORIGIN), bridge);
+        return true;
     }
 
     private final class AssetClient extends WebViewClient {
         @Override
         public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
-            if (request == null || request.getUrl() == null) return null;
+            return loader.shouldInterceptRequest(request.getUrl());
+        }
+
+        @Override
+        public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
             Uri uri = request.getUrl();
-            String host = uri.getHost();
-            if (!"appassets.androidplatform.net".equalsIgnoreCase(host) && !"localhost".equalsIgnoreCase(host)) {
-                return super.shouldInterceptRequest(view, request);
-            }
-            String path = uri.getPath();
-            if (path == null || path.isEmpty() || path.equals("/")) {
-                path = "/index.html";
-            }
-
-            if (path.startsWith("/doc/") || path.contains("current_document")) {
-                File cachedFile = new File(context.getCacheDir(), DocumentRepository.CURRENT_DOCUMENT_FILE);
-                if (cachedFile.exists()) {
-                    try {
-                        return response(MimeMap.of(path), new FileInputStream(cachedFile));
-                    } catch (IOException e) {
-                        Log.e(TAG, "Cannot stream cached document", e);
-                    }
-                }
-            }
-
-            if (path.startsWith("/")) {
-                path = path.substring(1);
-            }
-            try {
-                return response(MimeMap.of(path), context.getAssets().open("web/" + path));
-            } catch (IOException e) {
-                Log.w(TAG, "Asset not found: web/" + path);
-                return new WebResourceResponse("text/plain", "UTF-8", 404, "Not Found", null, null);
+            switch (NavPolicy.classify(uri.getScheme(), uri.getHost())) {
+                case ALLOW_IN_APP:
+                    return false;
+                case OPEN_EXTERNAL:
+                    callbacks.onExternalUrl(uri);
+                    return true;
+                default:
+                    return true;
             }
         }
 
-        private WebResourceResponse response(String mime, InputStream stream) {
-            Map<String, String> headers = new HashMap<>();
-            headers.put("Access-Control-Allow-Origin", "*");
-            headers.put("Cache-Control", "no-cache");
-            return new WebResourceResponse(mime, "UTF-8", 200, "OK", headers, stream);
+        @Override
+        public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+            callbacks.onRenderGone();
+            return true;
         }
     }
 }

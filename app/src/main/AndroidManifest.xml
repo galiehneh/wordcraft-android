@@ -5,21 +5,6 @@
     <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
 
-    <queries>
-        <intent>
-            <action android:name="android.intent.action.VIEW" />
-            <data android:scheme="content" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.GET_CONTENT" />
-            <data android:mimeType="*/*" />
-        </intent>
-        <intent>
-            <action android:name="android.intent.action.OPEN_DOCUMENT" />
-            <data android:mimeType="*/*" />
-        </intent>
-    </queries>
-
     <application
         android:allowBackup="true"
         android:hardwareAccelerated="true"
@@ -27,12 +12,12 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:label="@string/app_name"
         android:supportsRtl="true"
-        android:theme="@style/Theme.WordCraft"
-        android:usesCleartextTraffic="true">
+        android:enableOnBackInvokedCallback="true"
+        android:theme="@style/Theme.WordCraft">
 
         <activity
             android:name=".MainActivity"
-            android:configChanges="keyboardHidden|orientation|screenSize|screenLayout|smallestScreenSize"
+            android:configChanges="uiMode|density|fontScale|keyboard|keyboardHidden|navigation|locale|layoutDirection|screenLayout|smallestScreenSize|orientation|screenSize"
             android:exported="true"
             android:label="@string/app_name"
             android:launchMode="singleTask"

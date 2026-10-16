@@ -7,8 +7,8 @@
   <link rel="icon" href="./wordcraft-fa59e09a3f921e03.ico" integrity="sha384-99DzWb82rFgkdw7hjKziyDQaHbMTklb9MWeLKF7LcVUnq80H4nDrc/pjHJtAj/AA"/>
   
 <script type="module">
-import init, * as bindings from './wordcraft-web-99713625459fec5d.js';
-const wasm = await init({ module_or_path: './wordcraft-web-99713625459fec5d_bg.wasm' });
+import init, * as bindings from './wordcraft-web-95cf93ce17f5adf8.js';
+const wasm = await init({ module_or_path: './wordcraft-web-95cf93ce17f5adf8_bg.wasm' });
 
 
 window.wasmBindings = bindings;
@@ -33,12 +33,16 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       }
 
       // Called from the Rust UI (js_sys::eval) when it enters or leaves edit mode.
+      // Inside the Android app they do nothing: eframe focuses its input while egui wants an IME
+      // and the host is told from Rust, so a shim must not raise the keyboard on its own.
       window.showSoftKeyboard = function() {
+        if (window.WordCraftHost) return;
         var input = textAgentInput();
         if (!input) return;
         try { input.focus({ preventScroll: true }); } catch (e) { input.focus(); }
       };
       window.hideSoftKeyboard = function() {
+        if (window.WordCraftHost) return;
         var input = textAgentInput();
         if (input) { try { input.blur(); } catch (e) {} }
       };
@@ -108,17 +112,8 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       window.addEventListener('TrunkApplicationStarted', sendReady);
       if (window.wasmBindings) sendReady();
 
-      // The soft keyboard follows the focus of eframe's text input.
-      var imeVisible = null;
-      function imeListener(visible) {
-        return function(e) {
-          if (e.target !== textAgentInput() || imeVisible === visible) return;
-          imeVisible = visible;
-          post({ type: 'ime', visible: visible });
-        };
-      }
-      document.addEventListener('focusin', imeListener(true), true);
-      document.addEventListener('focusout', imeListener(false), true);
+      // The soft keyboard is posted from Rust (HostSync): `ime` follows egui's PlatformOutput.ime,
+      // the single source of truth. No focusin/focusout heuristic here.
 
       // Links that open a window go to the system browser instead.
       window.open = function(url) {
@@ -140,7 +135,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
               api.wordcraft_open_url(String(msg.url || ''), String(msg.name || ''), msg.recovered === true);
               break;
             case 'saveResult':
-              api.wordcraft_save_result(msg.ticket >>> 0, String(msg.outcome || 'failed'), String(msg.message || ''));
+              api.wordcraft_save_result(msg.ticket >>> 0, String(msg.outcome || 'failed'), String(msg.message || ''), typeof msg.name === 'string' ? msg.name : undefined);
               break;
             case 'back':
               post({ type: 'backResult', handled: !!api.wordcraft_back() });
@@ -176,7 +171,7 @@ dispatchEvent(new CustomEvent("TrunkApplicationStarted", {detail: {wasm}}));
       host.onmessage = function(ev) { window.wordcraftHostEvent(ev.data); };
     })();
   </script>
-<link rel="modulepreload" href="./wordcraft-web-99713625459fec5d.js" crossorigin="anonymous" integrity="sha384-QXcqTZ8y+quSDbByE/Ntju1YdLdgFIK1dIt2CA2Jiw/njbAP3sjemRpRAav65icl"><link rel="preload" href="./wordcraft-web-99713625459fec5d_bg.wasm" crossorigin="anonymous" integrity="sha384-9vbqON0SJG0nEEfDEc8Roiqcgbl8ULdIUygv7+WxP/0xjPp45u4arAGEStfa/Jvu" as="fetch" type="application/wasm"></head>
+<link rel="modulepreload" href="./wordcraft-web-95cf93ce17f5adf8.js" crossorigin="anonymous" integrity="sha384-EczJVcLv5IgnmMX+Wi1wvYfvXHe8AbEHoqeKGdaNfyeXMa2BUZTXuqkbNuih4u9s"><link rel="preload" href="./wordcraft-web-95cf93ce17f5adf8_bg.wasm" crossorigin="anonymous" integrity="sha384-g5bffuu3xnWqpeo6jfbRD3Ed7U42Kt8K9UuJAOgKBeIeWKNcqikn2Ub35c3C37DM" as="fetch" type="application/wasm"></head>
 <body>
   <canvas id="wordcraft_canvas"></canvas>
   <div id="wordcraft_loading">Loading WordCraft&hellip;</div>
